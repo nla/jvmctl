@@ -10,7 +10,7 @@ and debugging tasks.
 jvmctl is a single Python script with no other dependencies.
 
 1. Install Python 2.7
-2. `cp jvmctl.py /usr/local/bin/jvmctl`
+2. `cp jvmctl /usr/local/bin`
 
 ## Configuration
 
