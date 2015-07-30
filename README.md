@@ -31,14 +31,14 @@ script and application as environment variables.
 ### Deployment Options
 
 Option      | Default        | Description
-------------|-----------------------------------------
+------------|----------------|-------------------------
 REPO        |                | svn or git repository url to deploy from
 GIT_BRANCH  | master         | git branch to deploy from 
 
 ### Process Options
 
 Option      | Default        | Description
-------------|-----------------------------------------
+------------|----------------|------------------------
 USER        | webapp         | unix account to run the application under
 JAVA_HOME   | /usr/lib/jvm/java-1.8.0 | path of the Java runtime to use
 JAVA_OPTS   |                | extra options to pass to java (system properties, GC options etc)
@@ -48,7 +48,7 @@ OOM_EMAIL   | root@localhost | address to email out of memory errors to
 ### Webapp Options
 
 Option        | Default        | Description
---------------|-----------------------------------------
+--------------|----------------|------------------------
 CONTAINER     | jetty          | Servlet container to use or `none`
 JETTY_VERSION | 9.2.5.v20141112 | Version of jetty to use (will be downloaded automatically)
 PORT          |                | HTTP port for servlet container
