@@ -73,6 +73,6 @@ forward logs to syslog to write to text files or a remote logserver.  See
 
 ### Why Python 2.7 and not Python3/Perl/Ruby/Java/bash/...?
 
-It's installed by default on most servers, has a large standard
-library with good error handling and operating system APIs. That and
-I know it better than Perl.
+It's installed by default on most servers, starts fast and has a large standard
+library with good error handling and APIs for interacting with OS services. And
+I know it much better than Perl. ;-)
