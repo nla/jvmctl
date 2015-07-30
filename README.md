@@ -82,5 +82,5 @@ I know it much better than Perl. ;-)
 jvmctl delegates to systemd for process and log management to systemd.  While it
 would be possible to add support for other systems (and indeed our previous
 generation tool did) standardising on one platform has made the code considerably
-simpler.  In future we may consider adding Solaris support again as SMF can also
+simpler.  In future we may consider adding Solaris support again as SMF also
 provides much of the required functionality.
