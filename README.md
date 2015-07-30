@@ -71,7 +71,7 @@ See `man journalctl` for more options.  You can also configure journald to
 forward logs to syslog to write to text files or a remote logserver.  See
 `man journald.conf`.
 
-### Why Python 2.7 and not Python3/Perl/Ruby/Java/bash/...?
+### Why Python 2 and not Python 3/Perl/Ruby/Java/bash/...?
 
 It's installed by default on most servers, starts fast and has a large standard
 library with good error handling and APIs for interacting with OS services. And
