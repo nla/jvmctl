@@ -159,12 +159,12 @@ if __name__ == '__main__':
                 n /= 1000.0
             return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
 
-    def timefmt(n):
+    def timefmt(n, sep=' '):
         if abs(n) < 1.0:
             return sifmt(n, 's')
         for unit, divisor in [('s', 60), ('min', 60), ('hr', 24)]:
             if abs(n) < divisor:
-                return '%3.3g%s%s' % (n, unit)
+                return '%3.3g%s%s' % (n, sep, unit)
             n /= divisor
         return '%3.3g%s%s' % (n, 'days')
 
