@@ -237,6 +237,7 @@ if __name__ == '__main__':
             for entry in data:
                 print(entry.name, '=', fmt(entry))
         if args.interval > 0 and (args.count is None or i < args.count):
+            sys.stdout.flush()
             time.sleep(args.interval)
             i += 1
         else:
