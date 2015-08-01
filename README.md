@@ -7,10 +7,11 @@ and debugging tasks.
 
 ## Installation
 
-jvmctl is a single Python script with no other dependencies.
+1. Install Python 2.7 (you probably already have it)
+2. `cp jvmctl /usr/local/bin`
 
-1. Install Python 2.7
-2. `cp jvmctl.py /usr/local/bin/jvmctl`
+Depending on the applications you want to run you may also want to install a JDK,  version 
+control (git, svn) and build tools (Maven, Gradle).
 
 ## Configuration
 
@@ -31,14 +32,14 @@ script and application as environment variables.
 ### Deployment Options
 
 Option      | Default        | Description
-------------|-----------------------------------------
+------------|----------------|-------------------------
 REPO        |                | svn or git repository url to deploy from
 GIT_BRANCH  | master         | git branch to deploy from 
 
 ### Process Options
 
 Option      | Default        | Description
-------------|-----------------------------------------
+------------|----------------|------------------------
 USER        | webapp         | unix account to run the application under
 JAVA_HOME   | /usr/lib/jvm/java-1.8.0 | path of the Java runtime to use
 JAVA_OPTS   |                | extra options to pass to java (system properties, GC options etc)
@@ -48,7 +49,7 @@ OOM_EMAIL   | root@localhost | address to email out of memory errors to
 ### Webapp Options
 
 Option        | Default        | Description
---------------|-----------------------------------------
+--------------|----------------|------------------------
 CONTAINER     | jetty          | Servlet container to use or `none`
 JETTY_VERSION | 9.2.5.v20141112 | Version of jetty to use (will be downloaded automatically)
 PORT          |                | HTTP port for servlet container
@@ -71,8 +72,16 @@ See `man journalctl` for more options.  You can also configure journald to
 forward logs to syslog to write to text files or a remote logserver.  See
 `man journald.conf`.
 
-### Why Python 2.7 and not Python3/Perl/Ruby/Java/bash/...?
+### Why Python 2 and not Python 3/Perl/Ruby/Java/bash/...?
 
-It's installed by default on most servers, has a large standard
-library with good error handling and operating system APIs. That and
-I know it better than Perl.
+It's installed by default on most servers, starts fast and has a large standard
+library with good error handling and APIs for interacting with OS services. And
+I know it much better than Perl. ;-)
+
+### How about other OSes?
+
+jvmctl delegates to systemd for process and log management to systemd.  While it
+would be possible to add support for other systems (and indeed our previous
+generation tool did) standardising on one platform has made the code considerably
+simpler.  In future we may consider adding Solaris support again as SMF also
+provides much of the required functionality.
