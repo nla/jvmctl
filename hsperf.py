@@ -16,6 +16,7 @@ UNIT_HERTZ = 6
 
 
 class PerfData(Structure):
+    _gc_spaces = None
     _fields_ = [
             ('magic', c_uint),
             ('byte_order', c_byte),
@@ -61,6 +62,30 @@ class PerfData(Structure):
             if entry.name == key:
                 return entry
 
+    @property
+    def gc_spaces(self):
+        if self._gc_spaces is None:
+            spaces = {}
+            for entry in data:
+                m = re.match(r"^sun\.gc\.generation\.(\d+)\.space\.(\d+)\.(name|used|capacity|initCapacity|maxCapacity)$", entry.name)
+                if m:
+                    field = m.group(3)
+                    key = (m.group(1), m.group(2))
+                    if key not in spaces:
+                        spaces[key] = GCSpace(*key)
+                    if field == 'name':
+                        spaces[key]._name = entry
+                    elif field == 'used':
+                        spaces[key]._used = entry
+                    elif field == 'initCapacity':
+                        spaces[key]._init = entry
+                    elif field == 'capacity':
+                        spaces[key]._capacity = entry
+                    elif field == 'maxCapacity':
+                        spaces[key]._max = entry
+            self._gc_spaces = list(sorted(spaces.values(), key=lambda s: (s.generation_id, s.space_id)))
+        return self._gc_spaces
+
 class PerfEntry(Structure):
     _name = None
     _cvalue = None
@@ -92,38 +117,56 @@ class PerfEntry(Structure):
             self._cvalue = ctype.from_address(addressof(self) + self.data_offset)
             return self._cvalue.value
 
+class GCSpace:
+    def __init__(self, generation_id, space_id):
+        self.generation_id = generation_id
+        self.space_id = space_id
+
+    @property
+    def name(self): return self._name.value
+    @property 
+    def used(self): return self._used.value
+    @property
+    def max(self): return self._max.value
+    @property
+    def init(self): return self._init.value
+    @property
+    def capacity(self): return self._capacity.value
+    @property
+    def free(self): return self.capacity - self.used
+
 if __name__ == '__main__':
-    import argparse, time, sys, itertools
+    import argparse, time, sys, itertools, re
 
-    def binfmt(n, unit='B'):
-        for prefix in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+    def binfmt(n, unit='iB', sep=' '):
+        for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
             if n < 1024.0:
-                return '%3.1f %s%s' % (n, prefix, unit)
+                return '%3.3g%s%s%s' % (n, sep, prefix, unit)
             n /= 1024.0
-        return '%3.1f %s%s' % (n, 'Yi', unit)
+        return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
 
-    def sifmt(n, unit=''):
-        if abs(n) < 1.0:
+    def sifmt(n, unit='', sep=' '):
+        if 0.0 < abs(n) < 1.0:
             for prefix in ['m', 'μ', 'n', 'p']:
                 if abs(n) >= 1.0:
-                    return '%4.1f %s%s' % (n, prefix, unit)
+                    return '%3.3g%s%s%s' % (n, sep, prefix, unit)
                 n *= 1000.0
-            return '%3.1f %s%s' % (n, 'f', unit)
+            return '%3.3g%s%s%s' % (n, sep, 'f', unit)
         else:
             for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
                 if abs(n) < 1000.0:
-                    return '%3.1f %s%s' % (n, prefix, unit)
+                    return '%3.3g%s%s%s' % (n, sep, prefix, unit)
                 n /= 1000.0
-            return '%3.1f %s%s' % (n, 'Y', unit)
+            return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
 
     def timefmt(n):
         if abs(n) < 1.0:
             return sifmt(n, 's')
         for unit, divisor in [('s', 60), ('min', 60), ('hr', 24)]:
             if abs(n) < divisor:
-                return '%3.1f %s' % (n, unit)
+                return '%3.3g%s%s' % (n, unit)
             n /= divisor
-        return '%3.1f %s' % (n, 'days')
+        return '%3.3g%s%s' % (n, 'days')
 
     parser = argparse.ArgumentParser(description="Read JVM hsperfdata performance counters.")
     parser.add_argument('key', nargs='*')
@@ -133,6 +176,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--count', type=int)
     parser.add_argument('-H', '--human-readable', action='store_true', help="format bytes with IEC binary units")
     parser.add_argument('--si', action='store_true', help="format bytes using SI units")
+    parser.add_argument('--free', action='store_true', help="show memory usage")
     args = parser.parse_args()
 
     if args.pid:
@@ -148,13 +192,17 @@ if __name__ == '__main__':
 
     hrtfreq = float(data['sun.os.hrt.frequency'].value)
 
+    def fmtb(n, short=False):
+        if args.human_readable:
+            return binfmt(n, '' if short else 'iB', '' if short else ' ')
+        elif args.si:
+            return sifmt(n, '' if short else 'B', '' if short else ' ')
+        return str(n)
+
     def fmt(entry):
         if entry.vector_length == 0:
             if entry.data_unit == UNIT_BYTES:
-                if args.human_readable:
-                    return binfmt(entry.value, 'B')
-                elif args.si:
-                    return sifmt(entry.value, 'B')
+                return fmtb(entry.value)
             elif entry.data_unit == UNIT_TICKS:
                 if args.human_readable:
                     return timefmt(entry.value / hrtfreq)
@@ -167,7 +215,23 @@ if __name__ == '__main__':
 
     i = 1
     while True:
-        if args.key:
+        if args.free:
+            if i > 1:
+                print()
+            if args.human_readable or args.si:
+                spec = '%-6s %8s %8s %8s %6s %8s %8s'
+            else:
+                spec = '%-6s %12s %12s %12s %6s %12s %12s'
+            print(spec % ('', 'Size', 'Used', 'Free', 'Use%', 'Max', 'Init'))
+            for space in data.gc_spaces:
+                print(spec % (space.name.title() + ':',
+                        fmtb(space.capacity, short=True),
+                        fmtb(space.used, short=True),
+                        fmtb(space.free, short=True),
+                        '%d%%' % long(space.used * 100 / space.capacity),
+                        fmtb(space.max, short=True),
+                        fmtb(space.init, short=True)))
+        elif args.key:
             print(' '.join(fmt(data[key]) for key in args.key))
         else:
             for entry in data:
