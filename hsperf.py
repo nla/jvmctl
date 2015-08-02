@@ -53,11 +53,11 @@ class PerfData(Structure):
         sane_max = self.buflen - sizeof(PerfEntry)
         offset = self.entry_offset
         for i in xrange(self.num_entries):
-            if not sane_min <= offset <= sane_max:
+            if not sane_min <= offset <= sane_max - sizeof(PerfEntry):
                 raise IndexError("start of entry out of bounds: %d" % offset)
             entry = PerfEntry.from_address(addressof(self) + offset)
             entry.entry_length = entry_length = entry.raw_entry_length
-            if not sizeof(PerfEntry) <= entry_length <= sane_max - offset:
+            if not sizeof(PerfEntry) <= entry_length <= self.buflen - offset:
                 raise IndexError("entry_length out of bounds: %d" % entry_length)
             yield entry
             offset += entry_length
