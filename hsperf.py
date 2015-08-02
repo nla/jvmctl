@@ -34,9 +34,12 @@ class PerfData(Structure):
         with open(path, 'rb') as f:
             mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_COPY)
         data = cls.from_buffer(mm)
-        if not data.is_valid():
-            raise ValueError("%s: unsupported hsperfdata version (magic=0x%x, ver=%d.%d)" % 
-                    (path, data.magic, data.major_version, data.minor_version))
+        data.buflen = len(mm)
+        if data.magic not in (0xcafec0c0L, 0xc0c0fecaL):
+            raise ValueError("%s: bad magic (0x%x) not a hsperfdata file" % (path, data.magic))
+        if data.major_version != 2:
+            raise ValueError("%s: unsupported hsperfdata version: %d.%d" % (path, 
+                data.major_version, data.minor_version))
         return data
 
     @classmethod
@@ -45,17 +48,19 @@ class PerfData(Structure):
         user = pwd.getpwuid(uid).pw_name
         return cls.from_file("/tmp/hsperfdata_%s/%d" % (user, pid))
 
-    def is_valid(self):
-        return ((self.magic == 0xcafec0c0L or self.magic == 0xc0c0fecaL) and
-                self.major_version == 2 and
-                self.entry_offset == sizeof(self))
-
     def __iter__(self):
-        addr = addressof(self) + self.entry_offset
+        sane_min = sizeof(self)
+        sane_max = self.buflen - sizeof(PerfEntry)
+        offset = self.entry_offset
         for i in xrange(self.num_entries):
-            entry = PerfEntry.from_address(addr)
+            if not sane_min <= offset <= sane_max:
+                raise IndexError("start of entry out of bounds: %d" % offset)
+            entry = PerfEntry.from_address(addressof(self) + offset)
+            entry.entry_length = entry_length = entry.raw_entry_length
+            if not sizeof(PerfEntry) <= entry_length <= sane_max - offset:
+                raise IndexError("entry_length out of bounds: %d" % entry_length)
             yield entry
-            addr += entry.entry_length
+            offset += entry_length
 
     def __getitem__(self, key):
         for entry in self:
@@ -86,35 +91,61 @@ class PerfData(Structure):
             self._gc_spaces = list(sorted(spaces.values(), key=lambda s: (s.generation_id, s.space_id)))
         return self._gc_spaces
 
+def bounded_string_at(ptr, maxlen):
+    s = string_at(ptr, maxlen)
+    return s[:s.index('\0')]
+
 class PerfEntry(Structure):
     _name = None
     _cvalue = None
     _fields_ = [
-            ('entry_length', c_int),
-            ('name_offset', c_int),
+            ('raw_entry_length', c_int),
+            ('raw_name_offset', c_int),
             ('vector_length', c_int),
             ('data_type', c_char),
             ('flags', c_byte),
             ('data_unit', c_byte),
             ('data_variability', c_byte),
-            ('data_offset', c_int)]
+            ('raw_data_offset', c_int)]
+
+    @property
+    def name_offset(self):
+        name_offset = self.raw_name_offset
+        if not sizeof(self) <= name_offset <= self.entry_length:
+            raise IndexError("name_offset out of bounds: %d" % name_offset)
+        return name_offset
+
+    @property
+    def data_offset(self):
+        data_offset = self.raw_data_offset
+        if not sizeof(self) <= data_offset <= self.entry_length:
+            raise IndexError("data_offset out of bounds: %d" % data_offset)
+        return data_offset
 
     @property
     def name(self):
         if self._name is None:
-            self._name = string_at(addressof(self) + self.name_offset)
+           offset = self.name_offset
+           self._name = bounded_string_at(addressof(self) + offset, self.entry_length - offset)
         return self._name
 
     @property
     def value(self):
         if self._cvalue is not None:
             return self._cvalue.value
-        elif self.vector_length > 0:
+        offset = self.data_offset
+        maxlen = self.entry_length - offset
+        vlen = self.vector_length
+        if vlen > 0:
             if self.data_type == 'B':
-                return string_at(addressof(self) + self.data_offset)
+                if vlen > maxlen:
+                    raise IndexError("string longer than entry")
+                return bounded_string_at(addressof(self) + offset, vlen)
         else:
             ctype = DATA_TYPES[self.data_type]
-            self._cvalue = ctype.from_address(addressof(self) + self.data_offset)
+            if sizeof(ctype) > maxlen:
+                raise IndexError("data extends past end of entry")
+            self._cvalue = ctype.from_address(addressof(self) + offset)
             return self._cvalue.value
 
 class GCSpace:
@@ -139,6 +170,8 @@ if __name__ == '__main__':
     import argparse, time, sys, itertools, re
 
     def binfmt(n, unit='iB', sep=' '):
+        if n == 0:
+            return 0
         for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
             if n < 1024.0:
                 return '%3.3g%s%s%s' % (n, sep, prefix, unit)
@@ -166,7 +199,7 @@ if __name__ == '__main__':
             if abs(n) < divisor:
                 return '%3.3g%s%s' % (n, sep, unit)
             n /= divisor
-        return '%3.3g%s%s' % (n, 'days')
+        return '%3.3g%s%s' % (n, sep, 'days')
 
     parser = argparse.ArgumentParser(description="Read JVM hsperfdata performance counters.")
     parser.add_argument('key', nargs='*')
@@ -207,7 +240,7 @@ if __name__ == '__main__':
                 if args.human_readable:
                     return timefmt(entry.value / hrtfreq)
                 elif args.si:
-                    return sismft(entry.value / hrtfreq, 's')
+                    return sifmt(entry.value / hrtfreq, 's')
             elif entry.data_unit == UNIT_HERTZ:
                 if args.human_readable or args.si:
                     return sifmt(entry.value, 'Hz')
