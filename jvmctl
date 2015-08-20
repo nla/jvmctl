@@ -567,7 +567,7 @@ def build(node, workarea):
         if path.exists(nla_deploy):
             subprocess.call(['/bin/bash', '-e', 'nla-deploy.sh', target, nla_environ, node.apps_path], env=env)
         elif path.exists(pom):
-            subprocess.call(['mvn', 'package', '-P', nla_environ], env=env)
+            subprocess.call(['mvn', 'package'], env=env)
             wars = glob(path.join(moduledir, 'target/*.war'))
             for war in wars:
                 if len(wars) == 1:
@@ -577,6 +577,12 @@ def build(node, workarea):
                 unpack = path.join(target, basename)
                 os.makedirs(unpack)
                 subprocess.call(['unzip', '-d', unpack, war])
+            if not wars:
+                jars = glob(path.join(moduledir, 'target/*.jar'))
+                for jar in jars:
+                    if not path.basename(jar).startswith('original-'):
+                        print("Copying", jar, "to target")
+                        shutil.copy(jar, path.join(target, path.basename(jar)))
         else:
             print('nla.deploy.sh and pom.xml not found')
             print('At least one of them must exist. Bailing.')
