@@ -736,6 +736,7 @@ def systemd_register(node):
         f.write("StartLimitBurst=5\n")
         if socket:
             f.write("StandardInput=socket\n")
+        f.write("\n")
         f.write("[Install]\n")
         f.write("WantedBy=multi-user.target\n")
 
