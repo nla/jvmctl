@@ -18,6 +18,8 @@ from ConfigParser import SafeConfigParser
 from StringIO import StringIO
 from glob import glob
 
+VERSION = '0.0.4-SNAPSHOT'
+
 #----------------------------------------------------------------------
 # 1. Configuration Parser
 #----------------------------------------------------------------------
@@ -450,6 +452,11 @@ def status(node):
     sys.exit(subprocess.call(['systemctl', 'status', node.svc] + sys.argv[3:]))
 
 @cli_command(group="Configuration")
+def version(*args):
+    """print jvmctl version"""
+    print('jvmctl ' + VERSION)
+
+@cli_command(group="Configuration")
 def delete(node):
     """delete the jvm's binaries and configuration"""
     node.spawnctl('stop')
@@ -762,7 +769,6 @@ def run(node):
     """run the application interactively"""
     pass
 
-
 def switchuid(uid, gid):
     def f():
         os.setgroups([])
@@ -801,8 +807,11 @@ def usage():
     sys.exit(1)
 
 def main():
-    if len(sys.argv) == 2 and sys.argv[1] == 'list':
-        list_nodes()
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'list':
+            list_nodes()
+        elif sys.argv[1] in ('version', '--version'):
+            version()
     elif len(sys.argv) < 3:
         usage()
     else:
