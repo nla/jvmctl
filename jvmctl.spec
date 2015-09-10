@@ -3,8 +3,7 @@ Summary: jvmctl is a tool for deploying and managing Java applications on EL7 se
 Name: jvmctl
 Version: %{versionfile}
 Release: 1.el7
-Source0: https://github.com/nla/jvmctl/archive/%{version}.tar.gz
-Source1: jvmctl-%{version}.tar.gz
+Source0: https://github.com/nla/jvmctl/archive/%{version}/jvmctl-%{version}.tar.gz
 License: MIT
 Vendor: NLA BSS
 Packager: Ross Paine <rpaine@nla.gov.au>

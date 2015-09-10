@@ -9,10 +9,9 @@ end
 desc "Download source archive as specified in the specfile"
 task :fetch do |task|
   source_archive = IO.popen("/usr/bin/spectool #{SPECFILE}").read.match(/Source0: (.*)/)[1]
-  destination    = IO.popen("/usr/bin/spectool #{SPECFILE}").read.match(/Source1: (.*)/)[1]
 
   Dir.chdir(File.join(ENV['HOME'], 'rpmbuild', 'SOURCES')) do
-    system '/usr/bin/wget', '-O', destination, source_archive
+    system '/usr/bin/wget', '-O', source_archive
   end
 end
 
