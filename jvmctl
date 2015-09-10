@@ -410,13 +410,6 @@ def start(node):
     node.autoregister()
     sys.exit(node.spawnctl('start'))
 
-@cli_command(group='Process management')
-def start(node):
-    """start the jvm"""
-    node.ensure_valid()
-    node.autoregister()
-    sys.exit(node.spawnctl('start'))
-
 @cli_command(group="Process management")
 def stop(node):
     """stop the jvm"""
@@ -431,6 +424,7 @@ def disable(node):
 def enable(node):
     """run the jvm auomatically on startup"""
     node.ensure_valid()
+    reconfigure(node)
     node.autoregister()
     sys.exit(node.spawnctl('enable'))
 
