@@ -32,13 +32,12 @@ task :build do |task|
 
   dir = File.dirname(__FILE__)
 
-  version = File.read(File.join(ROOT, 'VERSION')).chomp
   release = File.read(SPECFILE).match(/Release: (.*)/)[1]
 
   system 'rpmbuild', '-bb', SPECFILE
 
   mkdir_p 'RPMS'
-  cp File.join(ENV['HOME'], 'rpmbuild', 'RPMS', 'noarch', "jvmctl-#{version}-#{release}.noarch.rpm"), 'RPMS'
+  cp File.join(ENV['HOME'], 'rpmbuild', 'RPMS', 'noarch', "jvmctl-#{PACKAGE_VERSION}-#{release}.noarch.rpm"), 'RPMS'
 end
 
 task :build => :fetch
