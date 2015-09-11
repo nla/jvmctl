@@ -10,11 +10,11 @@ end
 
 desc "Download source archive as specified in the specfile"
 task :fetch do |task|
-  source_archive = IO.popen("/usr/bin/spectool #{SPECFILE}").read.match(/Source0: (.*)/)[1]
+  require 'fileutils'
+  include FileUtils
 
-  Dir.chdir(File.join(ENV['HOME'], 'rpmbuild', 'SOURCES')) do
-    system '/usr/bin/wget', '-O', source_archive
-  end
+  system '/usr/bin/spectool', '-g', SPECFILE
+  mv File.join(ROOT, "#{PACKAGE_NAME}-#{PACKAGE_VERSION}.tar.gz"), File.join(ENV['HOME'], 'rpmbuild', 'SOURCES')
 end
 
 desc "Clean up generated artifacts"
