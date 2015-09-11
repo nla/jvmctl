@@ -1,4 +1,6 @@
 ROOT = File.dirname(__FILE__)
+PACKAGE_NAME    = 'jvmctl'
+PACKAGE_VERSION = File.read(File.join(ROOT, 'VERSION')).chomp
 SPECFILE = File.join(ROOT, 'jvmctl.spec')
 
 require 'rake/version_task'
