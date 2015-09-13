@@ -315,7 +315,7 @@ class SvnRepo(Repo):
             subprocess.call(['svn', 'info'], stdout=f)
 
 def open_repo(url, node):
-    if url.startswith('git'):
+    if url.startswith('git') or url.startswith('https://github.com'):
         return GitRepo(url, node)
     else:
         return SvnRepo(url, node)
