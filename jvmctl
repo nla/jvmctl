@@ -40,6 +40,9 @@ defaults = {
     'JAVA_OPTS': '',
     'OOM_EMAIL': 'root@localhost',
     'SOCKET': '',
+    'SOCKET_USER': 'root',
+    'SOCKET_GROUP': 'root',
+    'SOCKET_MODE': '0660',
 }
 
 control_tools_root = path.dirname(path.dirname(path.realpath(__file__)))
@@ -747,10 +750,17 @@ def systemd_register(node):
             print('beep', socket_config)
             f.write("""[Socket]
 ListenStream={socket}
+SocketMode={socket_mode}
+SocketUser={socket_user}
+SocketGroup={socket_group}
 
 [Install]
 WantedBy=sockets.target
-""".format(socket=socket))
+""".format(socket=socket,
+                socket_user=node.config.get('jvm', 'SOCKET_USER'),
+                socket_group=node.config.get('jvm', 'SOCKET_GROUP'),
+                socket_mode=node.config.get('jvm', 'SOCKET_MODE')))
+
     elif path.exists(socket_config):
         os.unlink(socket_config)
 
