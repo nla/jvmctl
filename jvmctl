@@ -540,7 +540,7 @@ def show(node):
         f.close()
 
 @cli_command(group="Configuration")
-def parsed(node):
+def dump(node):
     """show the jvm's parsed configuration (including defaults)"""
     post_config(node)
     node.config.write(sys.stdout)
