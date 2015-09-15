@@ -636,6 +636,7 @@ def deploy(node):
     node.ensure_valid()
     if not os.access('/apps', os.W_OK):
         die("Need permission to write to /apps (maybe try sudo?)")
+    node.config # ensure config has been read before dropping privileges
     timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
     workarea = '/var/tmp/jvmctl-build-%s-%s' % (node.name, timestamp)
     target = path.join(workarea, 'target')
