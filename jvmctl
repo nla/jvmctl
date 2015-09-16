@@ -77,7 +77,7 @@ def parse_shell_arrays(data):
     """
     out = ""
     pos = 0
-    for m in re.finditer("\(([^)]*)\)", data):
+    for m in re.finditer("(?m)^(?:\s*|^[^=]*=\s*)\(([^)]*)\)\s*", data):
         body = m.group(1)
         body = body.replace('\n', '\n ')
         out += data[:m.start()] + body
