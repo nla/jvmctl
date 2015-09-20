@@ -18,7 +18,7 @@ from ConfigParser import SafeConfigParser, RawConfigParser
 from StringIO import StringIO
 from glob import glob
 
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 
 #----------------------------------------------------------------------
 # 1. Configuration Parser
