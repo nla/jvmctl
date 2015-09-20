@@ -52,6 +52,8 @@ After=network.target remote-fs.target
 Restart=on-failure
 StartLimitInterval=120
 StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
 
 [systemd.service.Install]
 WantedBy=multi-user.target
