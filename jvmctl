@@ -786,7 +786,6 @@ def systemd_register(node):
     socket_config = '/etc/systemd/system/' + node.svc + '.socket'
     if socket:
         with open(socket_config, 'w') as f:
-            print('beep', socket_config)
             f.write("""[Socket]
 ListenStream={socket}
 SocketMode={socket_mode}
