@@ -315,7 +315,7 @@ class JettyContainer:
     def context_path_for_war(self, war):
         prefix = self.node.config.get('jvm', 'ROOT_URL_PREFIX')
         basename = path.basename(war)
-        if basename == 'ROOT':
+        if basename == 'ROOT' or basename == 'ROOT.war':
             return prefix
         if basename.endswith('.war'):
             return path.join(prefix, basename[:-4])
