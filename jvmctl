@@ -538,7 +538,9 @@ def log(node):
     """browse the jvm's log file (use -f to follow tail)"""
     if os.getuid() != 0:
         print("Hint: try with sudo")
-    sys.exit(subprocess.call(['journalctl', '-u', node.svc] + sys.argv[3:]))
+    if 'SYSTEMD_PAGER' not in os.environ:
+        os.environ['SYSTEMD_PAGER'] = "LESS=FRXM less"
+    os.execvp('journalctl', ['journalctl', '-u', node.svc] + sys.argv[3:])
 
 def find_new_port():
     new_port = 8081
