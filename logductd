@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import os, asyncore, socket, struct, ctypes, array
+from collections import namedtuple
+from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
+
+Cred = namedtuple("Cred", "pid uid gid")
+
+class Handler(asyncore.dispatcher):
+    """Handles incoming log messages from applications."""
+
+    def handle_read(self):
+        data, ancdata, _, _ = recvmsg(self.socket, 8192, 4096)
+        print('recv:', repr(data), repr(ancdata))
+
+        cred = None
+        for level, type_, value in ancdata:
+            if level == socket.SOL_SOCKET:
+                if type_ == SCM_RIGHTS:
+                    fds = array.array('i', value)
+                elif type_ == SCM_CREDENTIALS:
+                    cred = Cred(*struct.unpack('3i', value))
+
+        print(cred, fds)
+
+
+        if not data:
+            self.handle_close()
+
+class Server(asyncore.dispatcher):
+    """Listens for new logduct connections and accepts them."""
+    def __init__(self, socket_path):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.bind(socket_path)
+        self.listen(5)
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            Handler(sock)
+
+def main():
+    server = Server('/tmp/logduct.sock')
+    asyncore.loop()
+
+if __name__ == '__main__': main()
