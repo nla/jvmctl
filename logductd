@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import os, asyncore, socket, struct, ctypes, array, re, errno
+import os, asyncore, socket, struct, ctypes, array, re, errno, argparse
 from collections import namedtuple
 from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
 from datetime import datetime
@@ -42,13 +42,15 @@ def format_prefix(meta):
     return "%s %s[%d]: " % (ts, meta.comm, meta.pid)
 
 class LogWriter:
-    def __init__(self, unit, logname):
+    def __init__(self, logdir, unit, logname):
         self.unit = unit
         self.file = None
         self.path = None
         self.start_of_line = True
-        self.template = "/logs/{unit}/%Y%m/{logname}.%Y-%m-%d.log".format(unit=unit, logname=logname)
-        self.link_path = "/logs/{unit}/{logname}.log".format(unit=unit, logname=logname)
+        self.template = "{logdir}/{unit}/%Y%m/{logname}.%Y-%m-%d.log".format(
+                logdir=logdir, unit=unit, logname=logname)
+        self.link_path = "{logdir}/{unit}/{logname}.log".format(
+                logdir=logdir, unit=unit, logname=logname)
 
     def open_file(self, now):
         path = now.strftime(self.template)
@@ -88,14 +90,15 @@ class LogWriter:
             self.start_of_line = False
 
 class LogManager:
-    def __init__(self):
+    def __init__(self, logdir):
         self.writers = {}
+        self.logdir = logdir
 
     def get(self, unit, logname):
         assert unit is not None
         writer = self.writers.get((unit, logname))
         if writer is None:
-            writer = LogWriter(unit, logname)
+            writer = LogWriter(self.logdir, unit, logname)
             self.writers[(unit, logname)] = writer
         return writer
 
@@ -129,12 +132,12 @@ class Handler(asyncore.dispatcher):
 
 class Server(asyncore.dispatcher):
     """Listens for new logduct connections and accepts them."""
-    def __init__(self, socket_path):
+    def __init__(self, socket_path, log_manager):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.bind(socket_path)
         self.listen(5)
-        self.log_manager = LogManager()
+        self.log_manager = log_manager
 
     def handle_accept(self):
         pair = self.accept()
@@ -143,8 +146,16 @@ class Server(asyncore.dispatcher):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
             Handler(sock, self.log_manager)
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Application logging daemon")
+    parser.add_argument("-s", "--socket", default="/run/logduct.sock", help="logductd socket to listen on")
+    parser.add_argument("-d", "--logdir", default="/logs", help="directory to write logs under")
+    return parser.parse_args()
+
 def main():
-    server = Server('/tmp/logduct.sock')
+    args = parse_arguments()
+    log_manager = LogManager(args.logdir)
+    server = Server(args.socket, log_manager)
     asyncore.loop()
 
 if __name__ == '__main__': main()
