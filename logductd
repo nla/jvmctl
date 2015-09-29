@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import os, asyncore, socket, struct, ctypes, array, re, errno, argparse, time
+import stat, sys
 from collections import namedtuple
 from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
 from datetime import datetime
 
 Cred = namedtuple("Cred", "pid uid gid")
 Metadata = namedtuple("Metadata", "time pid comm unit")
+
+def is_a_socket(fd):
+    """tests if the given file descriptor is a socket"""
+    return stat.S_ISSOCK(os.fstat(fd).st_mode)
 
 def slurp(path):
     with open(path) as f:
@@ -152,11 +157,14 @@ class Handler(asyncore.dispatcher):
 
 class Server(asyncore.dispatcher):
     """Listens for new logduct connections and accepts them."""
-    def __init__(self, socket_path, log_manager):
-        asyncore.dispatcher.__init__(self)
-        self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.bind(socket_path)
-        self.listen(5)
+    def __init__(self, sock, log_manager):
+        if isinstance(sock, str):
+            asyncore.dispatcher.__init__(self)
+            self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.bind(sock)
+            self.listen(5)
+        else:
+            asyncore.dispatcher.__init__(self, sock)
         self.log_manager = log_manager
 
     def handle_accept(self):
@@ -178,7 +186,13 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     log_manager = LogManager(args.logdir)
-    server = Server(args.socket, log_manager)
+
+    if is_a_socket(sys.stdin.fileno()):
+        sock = socket.fromfd(sys.stdin.fileno(), socket.AF_UNIX, socket.SOCK_STREAM)
+    else:
+        sock = args.socket
+    
+    server = Server(sock, log_manager)
 
     next_idle_check = 0
     while True:
