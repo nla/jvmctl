@@ -105,7 +105,6 @@ def recvmsg(sock, bufsize, ancbufsize=0, flags=0):
     pos = 0
     while pos < ancbufsize:
         cmsg = Cmsghdr.from_buffer(cbuf, pos)
-        print cmsg.level, cmsg.type, cmsg.len
         if cmsg.len < sizeof(Cmsghdr):
             break
         data_start = pos + cmsg_len(0)
