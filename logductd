@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import os, asyncore, socket, struct, ctypes, array, re, errno, argparse
+import os, asyncore, socket, struct, ctypes, array, re, errno, argparse, time
 from collections import namedtuple
 from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
 from datetime import datetime
@@ -51,6 +51,7 @@ class LogWriter:
                 logdir=logdir, unit=unit, logname=logname)
         self.link_path = "{logdir}/{unit}/{logname}.log".format(
                 logdir=logdir, unit=unit, logname=logname)
+        self.last_active = time.time()
 
     def open_file(self, now):
         path = now.strftime(self.template)
@@ -76,6 +77,7 @@ class LogWriter:
                 os.symlink(self.path, self.link_path)
 
     def write(self, data, meta):
+        self.last_active = time.time()
         self.open_file(now=meta.time)
         prefix = format_prefix(meta)
 
@@ -89,6 +91,11 @@ class LogWriter:
             print(data.replace('\n', '\n' + prefix), end="", file=self.file)
             self.start_of_line = False
 
+    def close(self):
+        if self.file is not None:
+            self.file.close()
+            self.file = None
+
 class LogManager:
     def __init__(self, logdir):
         self.writers = {}
@@ -101,6 +108,13 @@ class LogManager:
             writer = LogWriter(self.logdir, unit, logname)
             self.writers[(unit, logname)] = writer
         return writer
+
+    def close_idle(self, secs):
+        now = time.time()
+        for key, writer in self.writers.items():
+            if writer.last_active + secs < now:
+                del self.writers[key]
+                writer.close()
 
 class Handler(asyncore.dispatcher):
     """Handles incoming log messages from applications."""
@@ -147,15 +161,25 @@ class Server(asyncore.dispatcher):
             Handler(sock, self.log_manager)
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Application logging daemon")
-    parser.add_argument("-s", "--socket", default="/run/logduct.sock", help="logductd socket to listen on")
+    parser = argparse.ArgumentParser(
+            description="Listens on a unix socket for application log messages and writes them to a rotated file.",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-s", "--socket", default="/run/logduct.sock", help="unix socket to listen on")
     parser.add_argument("-d", "--logdir", default="/logs", help="directory to write logs under")
+    parser.add_argument("--idle", default=60, metavar='SECS', type=float, help="seconds after which idle log files will be closed")
     return parser.parse_args()
 
 def main():
     args = parse_arguments()
     log_manager = LogManager(args.logdir)
     server = Server(args.socket, log_manager)
-    asyncore.loop()
+
+    next_idle_check = 0
+    while True:
+        asyncore.loop(timeout=args.idle, count=1)
+        now = time.time()
+        if now > next_idle_check:
+            log_manager.close_idle(args.idle)
+            next_idle_check = now + args.idle
 
 if __name__ == '__main__': main()
