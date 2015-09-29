@@ -41,6 +41,11 @@ def format_prefix(meta):
     ts = meta.time.strftime('%H:%M:%S.%f')[:-3]
     return "%s %s[%d]: " % (ts, meta.comm, meta.pid)
 
+def getpeercred(sock):
+    data = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED,
+            struct.calcsize('3i'))
+    return Cred(*struct.unpack('3i', data))
+
 class LogWriter:
     def __init__(self, logdir, unit, logname):
         self.unit = unit
@@ -123,7 +128,8 @@ class Handler(asyncore.dispatcher):
     def __init__(self, sock, log_manager):
         asyncore.dispatcher.__init__(self, sock)
         self.log_manager = log_manager
-        self.unit = "default"
+        cred = getpeercred(sock)
+        self.unit = unit_for_pid(cred.pid)
 
     def writable(self):
         return False
