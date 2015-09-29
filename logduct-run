@@ -21,9 +21,10 @@ def connect_to_logductd(socket_path):
 
 def parse_fd_options(opts):
     fdlist = []
-    for opt in opts:
-        fd, logname = opt.split(':')
-        fdlist.append((int(fd), logname))
+    if opts is not None:
+        for opt in opts:
+            fd, logname = opt.split(':')
+            fdlist.append((int(fd), logname))
     return fdlist
 
 def reserve_fds(fds):

@@ -1,31 +1,131 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import os, asyncore, socket, struct, ctypes, array
+import os, asyncore, socket, struct, ctypes, array, re, errno
 from collections import namedtuple
 from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
+from datetime import datetime
 
 Cred = namedtuple("Cred", "pid uid gid")
+Metadata = namedtuple("Metadata", "time pid comm unit")
+
+def slurp(path):
+    with open(path) as f:
+        return f.read().strip()
+
+def parse_ancdata(ancdata):
+    fds = None
+    cred = None
+    for level, type_, value in ancdata:
+        if level == socket.SOL_SOCKET:
+            if type_ == SCM_RIGHTS:
+                fds = array.array('i', value)
+            elif type_ == SCM_CREDENTIALS:
+                cred = Cred(*struct.unpack('3i', value))
+    return fds, cred
+
+def comm_for_pid(pid):
+    try:
+        return slurp('/proc/%d/comm' % pid)
+    except IOError:
+        return None
+
+def unit_for_pid(pid):
+    try:
+        cgroup = slurp('/proc/%d/cgroup' % pid)
+        match = re.search("1:name=systemd:/system.slice/(?:jvm:)?(.+?).service", cgroup)
+        return match.group(1) if match else None
+    except IOError:
+        return None
+
+def format_prefix(meta):
+    ts = meta.time.strftime('%H:%M:%S.%f')[:-3]
+    return "%s %s[%d]: " % (ts, meta.comm, meta.pid)
+
+class LogWriter:
+    def __init__(self, unit, logname):
+        self.unit = unit
+        self.file = None
+        self.path = None
+        self.start_of_line = True
+        self.template = "/logs/{unit}/%Y%m/{logname}.%Y-%m-%d.log".format(unit=unit, logname=logname)
+        self.link_path = "/logs/{unit}/{logname}.log".format(unit=unit, logname=logname)
+
+    def open_file(self, now):
+        path = now.strftime(self.template)
+        if path != self.path:
+            if self.file is not None:
+                self.file.close()
+            self.path = path
+            try:
+                self.file = open(path, 'a', 0)
+            except IOError, e:
+                if e.errno == errno.ENOENT:
+                    os.makedirs(os.path.dirname(path))
+                    self.file = open(path, 'a', 0)
+
+            self.update_link()
+
+    def update_link(self):
+        try:
+            os.symlink(self.path, self.link_path)
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                os.unlink(self.link_path)
+                os.symlink(self.path, self.link_path)
+
+    def write(self, data, meta):
+        self.open_file(now=meta.time)
+        prefix = format_prefix(meta)
+
+        if self.start_of_line:
+            print(prefix, end="", file=self.file)
+
+        if data.endswith("\n"):
+            print(data[:-1].replace('\n', '\n' + prefix), file=self.file)
+            self.start_of_line = True
+        else:
+            print(data.replace('\n', '\n' + prefix), end="", file=self.file)
+            self.start_of_line = False
+
+class LogManager:
+    def __init__(self):
+        self.writers = {}
+
+    def get(self, unit, logname):
+        assert unit is not None
+        writer = self.writers.get((unit, logname))
+        if writer is None:
+            writer = LogWriter(unit, logname)
+            self.writers[(unit, logname)] = writer
+        return writer
 
 class Handler(asyncore.dispatcher):
     """Handles incoming log messages from applications."""
+    start_of_line = True
+
+    def __init__(self, sock, log_manager):
+        asyncore.dispatcher.__init__(self, sock)
+        self.log_manager = log_manager
+        self.unit = "default"
+
+    def writable(self):
+        return False
 
     def handle_read(self):
-        data, ancdata, _, _ = recvmsg(self.socket, 8192, 4096)
-        print('recv:', repr(data), repr(ancdata))
-
-        cred = None
-        for level, type_, value in ancdata:
-            if level == socket.SOL_SOCKET:
-                if type_ == SCM_RIGHTS:
-                    fds = array.array('i', value)
-                elif type_ == SCM_CREDENTIALS:
-                    cred = Cred(*struct.unpack('3i', value))
-
-        print(cred, fds)
-
+        data, ancdata, _, _ = recvmsg(self.socket, 65536, 4096)
 
         if not data:
-            self.handle_close()
+            return self.handle_close()
+
+        fds, cred = parse_ancdata(ancdata)
+
+        meta = Metadata(time=datetime.now(), pid=cred.pid,
+            comm=(comm_for_pid(cred.pid) or "unknown"),
+            unit=(unit_for_pid(cred.pid) or self.unit))
+
+        if meta.unit is not None:
+            log = self.log_manager.get(meta.unit, "stdio")
+            log.write(data, meta)
 
 class Server(asyncore.dispatcher):
     """Listens for new logduct connections and accepts them."""
@@ -34,13 +134,14 @@ class Server(asyncore.dispatcher):
         self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.bind(socket_path)
         self.listen(5)
+        self.log_manager = LogManager()
 
     def handle_accept(self):
         pair = self.accept()
         if pair is not None:
             sock, addr = pair
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-            Handler(sock)
+            Handler(sock, self.log_manager)
 
 def main():
     server = Server('/tmp/logduct.sock')
