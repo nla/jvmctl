@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import os, asyncore, socket, struct, ctypes, array, re, errno, argparse, time
-import stat, sys
+import stat, sys, signal, json
 from collections import namedtuple
 from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS
 from datetime import datetime
+from subprocess import Popen, PIPE
 
 Cred = namedtuple("Cred", "pid uid gid")
 Metadata = namedtuple("Metadata", "time pid comm unit")
@@ -63,16 +64,24 @@ def getpeercred(sock):
 class LogWriter:
     """A date rotated log file"""
 
-    def __init__(self, logdir, unit, logname):
+    def __init__(self, log_dir, unit, logname, start_of_line=True):
         self.unit = unit
+        self.logname = logname
         self.file = None
         self.path = None
-        self.start_of_line = True
-        self.template = "{logdir}/{unit}/%Y%m/{logname}.%Y-%m-%d.log".format(
-                logdir=logdir, unit=unit, logname=logname)
-        self.link_path = "{logdir}/{unit}/{logname}.log".format(
-                logdir=logdir, unit=unit, logname=logname)
+        self.start_of_line = start_of_line
+        self.template = "{log_dir}/{unit}/%Y%m/{logname}.%Y-%m-%d.log".format(
+                log_dir=log_dir, unit=unit, logname=logname)
+        self.link_path = "{log_dir}/{unit}/{logname}.log".format(
+                log_dir=log_dir, unit=unit, logname=logname)
         self.last_active = time.time()
+
+    def save(self):
+        return {
+            "unit": self.unit,
+            "logname": self.logname,
+            "start_of_line": self.start_of_line,
+        }
 
     def open_file(self, now):
         """(Re)open the log file, creating parent directories as needed."""
@@ -123,40 +132,70 @@ class LogWriter:
             self.file.close()
             self.file = None
 
+    def key(self):
+        return (self.unit, self.logname)
+
+
 class LogManager:
     """Tracks open log files"""
 
-    def __init__(self, logdir):
+    def __init__(self, log_dir, max_idle, writers=[]):
         self.writers = {}
-        self.logdir = logdir
+        self.log_dir = log_dir
+        self.max_idle = max_idle
+        self.last_idle_check = 0
+
+        print(writers)
+
+        for wstate in writers:
+            writer = LogWriter(log_dir=self.log_dir, **wstate)
+            self.writers[writer.key()] = writer
 
     def get(self, unit, logname):
         """Retrieves a LogWriter, creating it if necessary"""
         assert unit is not None
         writer = self.writers.get((unit, logname))
         if writer is None:
-            writer = LogWriter(self.logdir, unit, logname)
-            self.writers[(unit, logname)] = writer
+            writer = LogWriter(self.log_dir, unit, logname)
+            self.writers[writer.key()] = writer
         return writer
 
-    def close_idle(self, secs):
-        """Closes any LogWriters which have been idle for the given time"""
+    def close_idle(self):
+        """Closes any LogWriters which have been idle for max_idle secondss"""
         now = time.time()
+        if now < self.last_idle_check + self.max_idle:
+            return
         for key, writer in self.writers.items():
-            if writer.last_active + secs < now:
-                del self.writers[key]
+            if writer.last_active + self.max_idle < now:
                 writer.close()
+                del self.writers[key]
+        self.last_idle_check = now
+
+    def close_all(self):
+        """Closes all LogWriters"""
+        for key, writer in self.writers.items():
+            writer.close()
+            del self.writers[key]
+
+
+    def save(self):
+        return {
+            "log_dir": self.log_dir,
+            "max_idle": self.max_idle,
+            "writers": [writer.save() for writer in self.writers.itervalues()],
+        }
 
 class Handler(asyncore.dispatcher):
     """Handles incoming log messages from applications."""
-    start_of_line = True
 
-    def __init__(self, sock, log_manager):
+    def __init__(self, log_manager, sock=None, fd=None, unit=None):
+        if fd is not None:
+            sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
         asyncore.dispatcher.__init__(self, sock)
         self.log_manager = log_manager
         cred = getpeercred(sock)
-        self.unit = unit_for_pid(cred.pid)
+        self.unit = unit or unit_for_pid(cred.pid)
 
     def writable(self):
         """Prevent asyncore for waking up constantly: we never need to write"""
@@ -179,9 +218,19 @@ class Handler(asyncore.dispatcher):
             log = self.log_manager.get(meta.unit, "stdio")
             log.write(data, meta)
 
+    def save(self):
+        """Save state for process reloading"""
+        return {
+            "type": "Handler",
+            "fd": self.socket.fileno(),
+            "unit": self.unit
+        }
+
 class Server(asyncore.dispatcher):
     """Listens for new logduct connections and accepts them."""
-    def __init__(self, sock, log_manager):
+    def __init__(self, log_manager, sock=None, fd=None):
+        if fd is not None:
+            sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
         if isinstance(sock, str):
             asyncore.dispatcher.__init__(self)
             self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -197,7 +246,14 @@ class Server(asyncore.dispatcher):
         pair = self.accept()
         if pair is not None:
             sock, addr = pair
-            Handler(sock, self.log_manager)
+            Handler(self.log_manager, sock)
+
+    def save(self):
+        """Save state for process reloading"""
+        return {
+            "type": "Server",
+            "fd": self.socket.fileno()
+        }
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -206,25 +262,87 @@ def parse_arguments():
     parser.add_argument("-s", "--socket", default="/run/logduct.sock", help="unix socket to listen on")
     parser.add_argument("-d", "--logdir", default="/logs", help="directory to write logs under")
     parser.add_argument("--idle", default=60, metavar='SECS', type=float, help="seconds after which idle log files will be closed")
+    # --restore is for internal use only when reloading the daemon
+    parser.add_argument("--restore", action='store_true', help=argparse.SUPPRESS)
     return parser.parse_args()
 
-def main():
-    args = parse_arguments()
-    log_manager = LogManager(args.logdir)
+class Daemon:
+    def __init__(self):
+        args = parse_arguments()
+        if args.restore:
+            self.restore()
+        else:
+            self.init(args)
+        signal.signal(signal.SIGHUP, self.handle_hup)
 
-    if is_a_socket(sys.stdin.fileno()):
-        sock = socket.fromfd(sys.stdin.fileno(), socket.AF_UNIX, socket.SOCK_STREAM)
-    else:
-        sock = args.socket
-    
-    server = Server(sock, log_manager)
+    def init(self, args):
+        """Initialise everything afresh, not called when restoring."""
+        self.log_manager = LogManager(args.logdir, args.idle)
+        if is_a_socket(sys.stdin.fileno()):
+            # change the file number so we can use stdin to pass state 
+            # data when restoring
+            fd = os.dup(sys.stdin.fileno())
+            sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            sys.stdin.close()
+        else:
+            sock = args.socket
+        self.server = Server(self.log_manager, sock)
 
-    next_idle_check = 0
-    while True:
-        asyncore.loop(timeout=args.idle, count=1)
-        now = time.time()
-        if now > next_idle_check:
-            log_manager.close_idle(args.idle)
-            next_idle_check = now + args.idle
+    def restore(self):
+        """Reconstruct all our state from a json string."""
+        state = json.loads(sys.stdin.read())
+        self.log_manager = LogManager(**state["log_manager"])
 
-if __name__ == '__main__': main()
+        for dstate in state["dispatchers"]:
+            dtype = dstate.pop("type")
+            if dtype == 'Server':
+                self.server = Server(self.log_manager, **dstate)
+            elif dtype == 'Handler':
+                Handler(self.log_manager, **dstate)
+
+        # kill our parent and take their place so that nobody notices
+        if "parent_to_kill" in state:
+            os.kill(state["parent_to_kill"], signal.SIGINT)
+            
+
+    def handle_hup(self, signum, frame):
+        pid = os.getpid()
+        print('Reloading logductd...' + str(pid))
+        state = self.save()
+        
+        # prevent log file fds from being inherited
+        # our successor can reopen them
+        self.log_manager.close_all()
+
+        print('State:', state)
+
+        state["parent_to_kill"] = os.getpid()
+
+        # The child will send us SIGINT to let us know its taken over.
+        old_sigint_handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
+
+        try:
+            child = Popen([__file__, '--restore'], stdin=PIPE, close_fds=False)
+            child.communicate(json.dumps(state))
+            retcode = child.wait()
+            print("Reloading failed, child returned ", retcode)
+        finally:
+            signal.signal(signal.SIGINT, old_sigint_handler)
+
+    def save(self):
+        """Save the state of all open dispatchers"""
+        state = {
+            "log_manager": self.log_manager.save(),
+            "dispatchers": [dispatcher.save() for dispatcher
+                            in asyncore.socket_map.itervalues()
+                            if hasattr(dispatcher, "save")],
+        }
+        return state
+
+    def loop(self):
+        while asyncore.socket_map:
+            asyncore.loop(timeout=self.log_manager.max_idle, count=1)
+            self.log_manager.close_idle()
+
+if __name__ == '__main__': Daemon().loop()
