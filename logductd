@@ -191,6 +191,7 @@ class Handler(asyncore.dispatcher):
     def __init__(self, log_manager, sock=None, fd=None, unit=None):
         if fd is not None:
             sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            os.close(fd)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
         asyncore.dispatcher.__init__(self, sock)
         self.log_manager = log_manager
@@ -231,6 +232,7 @@ class Server(asyncore.dispatcher):
     def __init__(self, log_manager, sock=None, fd=None):
         if fd is not None:
             sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            os.close(fd)
         if isinstance(sock, str):
             asyncore.dispatcher.__init__(self)
             self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -279,9 +281,6 @@ class Daemon:
         """Initialise everything afresh, not called when restoring."""
         self.log_manager = LogManager(args.logdir, args.idle)
         if is_a_socket(sys.stdin.fileno()):
-            # change the file number so we can use stdin to pass state 
-            # data when restoring
-            fd = os.dup(sys.stdin.fileno())
             sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
             sys.stdin.close()
         else:
