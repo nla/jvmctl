@@ -145,8 +145,6 @@ class LogManager:
         self.max_idle = max_idle
         self.last_idle_check = 0
 
-        print(writers)
-
         for wstate in writers:
             writer = LogWriter(log_dir=self.log_dir, **wstate)
             self.writers[writer.key()] = writer
