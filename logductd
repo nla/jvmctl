@@ -14,10 +14,15 @@ def is_a_socket(fd):
     return stat.S_ISSOCK(os.fstat(fd).st_mode)
 
 def slurp(path):
+    """Read the contents of a file, stripping leading and trailing whitespace."""
     with open(path) as f:
         return f.read().strip()
 
 def parse_ancdata(ancdata):
+    """Parse unix socket ancilliary data that was received by recvmsg. Returns
+    (fds, cred) where fds is a list of received file descriptors and cred is
+    the sending processes' pid, uid and gid.  Either or both may be None.
+    """
     fds = None
     cred = None
     for level, type_, value in ancdata:
@@ -29,12 +34,14 @@ def parse_ancdata(ancdata):
     return fds, cred
 
 def comm_for_pid(pid):
+    """Retrieve the process name for a given process id."""
     try:
         return slurp('/proc/%d/comm' % pid)
     except IOError:
         return None
 
 def unit_for_pid(pid):
+    """Work out the systemd unit for a process by reading its cgroup."""
     try:
         cgroup = slurp('/proc/%d/cgroup' % pid)
         match = re.search("1:name=systemd:/system.slice/(?:jvm:)?(.+?).service", cgroup)
@@ -43,15 +50,19 @@ def unit_for_pid(pid):
         return None
 
 def format_prefix(meta):
+    """Format log metadata as a prefix to be prepended to log lines."""
     ts = meta.time.strftime('%H:%M:%S.%f')[:-3]
     return "%s %s[%d]: " % (ts, meta.comm, meta.pid)
 
 def getpeercred(sock):
+    """Returns the pid, uid and gid of the other end of a socket."""
     data = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED,
             struct.calcsize('3i'))
     return Cred(*struct.unpack('3i', data))
 
 class LogWriter:
+    """A date rotated log file"""
+
     def __init__(self, logdir, unit, logname):
         self.unit = unit
         self.file = None
@@ -64,6 +75,7 @@ class LogWriter:
         self.last_active = time.time()
 
     def open_file(self, now):
+        """(Re)open the log file, creating parent directories as needed."""
         path = now.strftime(self.template)
         if path != self.path:
             if self.file is not None:
@@ -79,6 +91,7 @@ class LogWriter:
             self.update_link()
 
     def update_link(self):
+        """Create or update a symlink to point at the latest rotation."""
         try:
             os.symlink(self.path, self.link_path)
         except OSError, e:
@@ -87,6 +100,7 @@ class LogWriter:
                 os.symlink(self.path, self.link_path)
 
     def write(self, data, meta):
+        """Write a string to the logfile, prefixing new lines with metadata."""
         self.last_active = time.time()
         self.open_file(now=meta.time)
         prefix = format_prefix(meta)
@@ -102,16 +116,22 @@ class LogWriter:
             self.start_of_line = False
 
     def close(self):
+        """Close the log file. Note that the next invocation of write() will
+        reopen it.
+        """
         if self.file is not None:
             self.file.close()
             self.file = None
 
 class LogManager:
+    """Tracks open log files"""
+
     def __init__(self, logdir):
         self.writers = {}
         self.logdir = logdir
 
     def get(self, unit, logname):
+        """Retrieves a LogWriter, creating it if necessary"""
         assert unit is not None
         writer = self.writers.get((unit, logname))
         if writer is None:
@@ -120,6 +140,7 @@ class LogManager:
         return writer
 
     def close_idle(self, secs):
+        """Closes any LogWriters which have been idle for the given time"""
         now = time.time()
         for key, writer in self.writers.items():
             if writer.last_active + secs < now:
@@ -131,15 +152,18 @@ class Handler(asyncore.dispatcher):
     start_of_line = True
 
     def __init__(self, sock, log_manager):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
         asyncore.dispatcher.__init__(self, sock)
         self.log_manager = log_manager
         cred = getpeercred(sock)
         self.unit = unit_for_pid(cred.pid)
 
     def writable(self):
+        """Prevent asyncore for waking up constantly: we never need to write"""
         return False
 
     def handle_read(self):
+        """Called when data is available for reading."""
         data, ancdata, _, _ = recvmsg(self.socket, 65536, 4096)
 
         if not data:
@@ -168,10 +192,11 @@ class Server(asyncore.dispatcher):
         self.log_manager = log_manager
 
     def handle_accept(self):
+        """Called when new connections are incoming. Accepts them and creates
+        a handler for them."""
         pair = self.accept()
         if pair is not None:
             sock, addr = pair
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
             Handler(sock, self.log_manager)
 
 def parse_arguments():
