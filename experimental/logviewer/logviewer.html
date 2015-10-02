@@ -7,7 +7,8 @@
     <div class="toolbar">
         <button onclick="firstPage(); setTail(false);">Start</button>
         <button onclick="prevPage(); setTail(false);">Prev Page</button>
-        <input id="positionTextbox" size="8" onchange="seek(parseInt(this.value)); setTail(false)"> / <span id="lengthSpan"></span> bytes
+        <input id="positionTextbox" size="8" onchange="seek(parseInt(this.value)); setTail(false)"> / <span
+            id="lengthSpan"></span> bytes
         <button onclick="nextPage(); setTail(false);">Next Page</button>
         <button onclick="lastPage()">End</button>
         <label><input id="tailCheckbox" type="checkbox" onchange="setTail(this.checked)"> Follow tail</label>
@@ -28,154 +29,154 @@
 
 <style>
 
-html, body {
-    height: 100%;
-    margin: 0;
-}
+    html, body {
+        height: 100%;
+        margin: 0;
+    }
 
-.container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
+    .container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
 
-.viewdoc {
-    font-family: monospace;
-    white-space: pre;
-    font-size: 14px;
-    line-height: 18px;
-}
+    .viewdoc {
+        font-family: monospace;
+        white-space: pre;
+        font-size: 14px;
+        line-height: 18px;
+    }
 
-.viewouter {
-    display: flex;
-    align-items: stretch;
-    flex-direction: row;
-    height: 100px;
-    flex-grow: 1;
-}
+    .viewouter {
+        display: flex;
+        align-items: stretch;
+        flex-direction: row;
+        height: 100px;
+        flex-grow: 1;
+    }
 
-.viewbox {
-    flex-grow: 2;
-    overflow-x: scroll;
-    overflow-y: hidden;
-    width: 0;
-}
+    .viewbox {
+        flex-grow: 2;
+        overflow-x: scroll;
+        overflow-y: hidden;
+        width: 0;
+    }
 
-.scrollbar {
-    background: #ccc;
-    width: 13px;
-}
+    .scrollbar {
+        background: #ccc;
+        width: 13px;
+    }
 
-.scrollbar > .handle {
-    background: #888;
-    width: auto;
-    height: 40px;
-    margin: 2px;
-    border-radius: 5px;
-}
+    .scrollbar > .handle {
+        background: #888;
+        width: auto;
+        height: 40px;
+        margin: 2px;
+        border-radius: 5px;
+    }
 </style>
 
 <script>
-var logUrl = '/logs/vmstat.log';
-var viewer = document.getElementById("viewer");
-var positionTextbox = document.getElementById("positionTextbox");
-var scrollHandle = document.getElementById("scrollHandle");
-var fetchSize = 32768;
-var linesToShow = 64;
+    var logUrl = '/logs/vmstat.log';
+    var viewer = document.getElementById("viewer");
+    var positionTextbox = document.getElementById("positionTextbox");
+    var scrollHandle = document.getElementById("scrollHandle");
+    var fetchSize = 32768;
+    var linesToShow = 64;
 
-var startOfPage;
-var endOfPage;
-var endOfLine;
-var logLength;
-var tailInterval = null;
+    var startOfPage;
+    var endOfPage;
+    var endOfLine;
+    var logLength;
+    var tailInterval = null;
 
-function queryFileLength(url, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            var length = parseInt(xhr.getResponseHeader("Content-Length"));
-            callback(length);
-        }
-    };
-    xhr.open('HEAD', url);
-    xhr.send(null);
-}
-
-function queryFileRange(url, start, length, callback) {
-    console.log("req " + start);
-    var range = start.toString() + '-' + (start + length - 1).toString();
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4 && xhr.status === 206) {
-            var contentRange = xhr.getResponseHeader("Content-Range");
-
-            callback(xhr.responseText, contentRange.split("/")[1]);
-        }
-    };
-    xhr.open('GET', url);
-    xhr.setRequestHeader('Range', 'bytes=' + range);
-    xhr.send(null);
-}
-
-function nthIndexOf(haystack, needle, n) {
-    var pos = -1;
-    for (var i = 0; i <= n && pos < haystack.length; i++) {
-        pos = haystack.indexOf(needle, pos + 1);
-    }
-    return pos;
-}
-
-function nthLastIndexOf(haystack, needle, n) {
-    var pos = haystack.length;
-    for (var i = 0; i <= n && pos >= 0; i++) {
-        pos = haystack.lastIndexOf(needle, pos - 1);
-    }
-    return pos;
-}
-
-
-function loadRange(url, start, length, reverse) {
-    queryFileRange(url, start, length, function(text, contentLength) {
-        var lineHeight = parseFloat(getComputedStyle(viewer).lineHeight);
-        var linesToShow = Math.floor(viewer.parentElement.clientHeight / lineHeight) - 1;
-        var i, j;
-        if (reverse) {
-            j = text.length;
-            i = nthLastIndexOf(text, "\n", linesToShow);
-            if (i === -1) {
-                i = 0;
-            } else {
-                i++;
+    function queryFileLength(url, callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                var length = parseInt(xhr.getResponseHeader("Content-Length"));
+                callback(length);
             }
-        } else {
-            if (text[0] == "\n") {
-                i = 1;
-            } else {
-                i = 0;
+        };
+        xhr.open('HEAD', url);
+        xhr.send(null);
+    }
+
+    function queryFileRange(url, start, length, callback) {
+        console.log("req " + start);
+        var range = start.toString() + '-' + (start + length - 1).toString();
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 206) {
+                var contentRange = xhr.getResponseHeader("Content-Range");
+
+                callback(xhr.responseText, contentRange.split("/")[1]);
             }
-            j = nthIndexOf(text, "\n", linesToShow);
-            if (j === -1) {
+        };
+        xhr.open('GET', url);
+        xhr.setRequestHeader('Range', 'bytes=' + range);
+        xhr.send(null);
+    }
+
+    function nthIndexOf(haystack, needle, n) {
+        var pos = -1;
+        for (var i = 0; i <= n && pos < haystack.length; i++) {
+            pos = haystack.indexOf(needle, pos + 1);
+        }
+        return pos;
+    }
+
+    function nthLastIndexOf(haystack, needle, n) {
+        var pos = haystack.length;
+        for (var i = 0; i <= n && pos >= 0; i++) {
+            pos = haystack.lastIndexOf(needle, pos - 1);
+        }
+        return pos;
+    }
+
+
+    function loadRange(url, start, length, reverse) {
+        queryFileRange(url, start, length, function (text, contentLength) {
+            var lineHeight = parseFloat(getComputedStyle(viewer).lineHeight);
+            var linesToShow = Math.floor(viewer.parentElement.clientHeight / lineHeight) - 1;
+            var i, j;
+            if (reverse) {
                 j = text.length;
+                i = nthLastIndexOf(text, "\n", linesToShow);
+                if (i === -1) {
+                    i = 0;
+                } else {
+                    i++;
+                }
+            } else {
+                if (text[0] == "\n") {
+                    i = 1;
+                } else {
+                    i = 0;
+                }
+                j = nthIndexOf(text, "\n", linesToShow);
+                if (j === -1) {
+                    j = text.length;
+                }
             }
-        }
-        viewer.textContent = text.substring(i, j);
-        startOfPage = start + i;
-        window.endOfPage = start + j;
-        positionTextbox.value = startOfPage;
-        lengthSpan.textContent = contentLength;
+            viewer.textContent = text.substring(i, j);
+            startOfPage = start + i;
+            window.endOfPage = start + j;
+            positionTextbox.value = startOfPage;
+            lengthSpan.textContent = contentLength;
 
-        var k = text.indexOf("\n", i);
-        if (k < 0 || k > j) {
-          k = j;
-        }
-        endOfLine = start + k;
+            var k = text.indexOf("\n", i);
+            if (k < 0 || k > j) {
+                k = j;
+            }
+            endOfLine = start + k;
 
-        updateScrollbar(startOfPage, contentLength, j - i);
-        window.logLength = contentLength;
-    });
-}
+            updateScrollbar(startOfPage, contentLength, j - i);
+            window.logLength = contentLength;
+        });
+    }
 
-function updateScrollbar(position, length, viewSize) {
+    function updateScrollbar(position, length, viewSize) {
         var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
         var handleSize = vspace * viewSize / length;
         if (handleSize < 20) {
@@ -184,134 +185,134 @@ function updateScrollbar(position, length, viewSize) {
         var handlePosition = Math.floor((vspace - handleSize) * position / length);
         scrollHandle.style.height = handleSize + "px";
         scrollHandle.style.marginTop = handlePosition + "px";
-}
-
-function seek(pos) {
-    loadRange(logUrl, pos, fetchSize);
-}
-
-
-function firstPage() {
-    seek(0);
-}
-
-function nextPage() {
-    seek(endOfPage);
-}
-
-function nextLine() {
-    seek(endOfLine);
-}
-
-function prevLine() {
-    // TODO
-    prevPage();
-}
-
-function prevPage() {
-    var length = fetchSize;
-    var start = startOfPage - fetchSize;
-    if (start < 0) {
-        start = 0;
-        length = startOfPage;
     }
-    loadRange(logUrl, start, length, true);
-}
 
-function lastPage() {
-    queryFileLength(logUrl, function(length) {
-        var start = length - fetchSize;
+    function seek(pos) {
+        loadRange(logUrl, pos, fetchSize);
+    }
+
+
+    function firstPage() {
+        seek(0);
+    }
+
+    function nextPage() {
+        seek(endOfPage);
+    }
+
+    function nextLine() {
+        seek(endOfLine);
+    }
+
+    function prevLine() {
+        // TODO
+        prevPage();
+    }
+
+    function prevPage() {
+        var length = fetchSize;
+        var start = startOfPage - fetchSize;
         if (start < 0) {
             start = 0;
+            length = startOfPage;
         }
-        loadRange(logUrl, start, fetchSize, true);
-    });
-}
-
-function setTail(enabled) {
-    if (enabled) {
-        window.tailInterval = setInterval(lastPage, 250);
-    } else if (tailInterval) {
-        clearInterval(tailInterval);
+        loadRange(logUrl, start, length, true);
     }
-    if (!(tailCheckbox.checked) !== !enabled) {
-        tailCheckbox.checked = enabled;
+
+    function lastPage() {
+        queryFileLength(logUrl, function (length) {
+            var start = length - fetchSize;
+            if (start < 0) {
+                start = 0;
+            }
+            loadRange(logUrl, start, fetchSize, true);
+        });
     }
-}
 
-if (tailCheckbox.checked) {
-    setTail(true);
-} else {
-    firstPage();
-}
+    function setTail(enabled) {
+        if (enabled) {
+            window.tailInterval = setInterval(lastPage, 250);
+        } else if (tailInterval) {
+            clearInterval(tailInterval);
+        }
+        if (!(tailCheckbox.checked) !== !enabled) {
+            tailCheckbox.checked = enabled;
+        }
+    }
 
-scrollHandle.parentElement.addEventListener("mousedown", function(event) {
-    var mpos = event.clientY - scrollHandle.parentElement.offsetTop;
-    var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
-    var pos = Math.floor(logLength * mpos / vspace);
-    if (pos < 0) {
-        firstPage();
-    } else if (pos > logLength) {
-        lastPage();
+    if (tailCheckbox.checked) {
+        setTail(true);
     } else {
-        seek(pos);
-    }
-});
-
-document.addEventListener("wheel", function(e) {
-    if (e.deltaY > 0) {
-        nextPage();
-        setTail(false);
-    } else if (e.deltaY < 0) {
-        prevPage();
-        setTail(false);
-    }
-});
-
-document.addEventListener("keydown", function(e) {
-    switch (e.keyCode) {
-    case 35: // end
-        lastPage();
-        setTail(false);
-        break;
-    case 36: // home
         firstPage();
-        setTail(false);
-        break;
-    case 40: // down
-    case 74: // j
-        nextLine();
-        setTail(false);
-        break;
-    case 33: // page up
-    case 38: // up
-        setTail(false);
-        prevPage();
-        break;
-    case 32: // space
-    case 34: // page down
-        setTail(false);
-        nextPage();
-        break;
-    case 70: // f
-        if (e.shiftKey) {
-            setTail(true);
-        } else {
-            setTail(false);
-            nextPage();
-        }
-        break;
-    case 71: // g
-        setTail(false);
-        if (e.shiftKey) {
+    }
+
+    scrollHandle.parentElement.addEventListener("mousedown", function (event) {
+        var mpos = event.clientY - scrollHandle.parentElement.offsetTop;
+        var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
+        var pos = Math.floor(logLength * mpos / vspace);
+        if (pos < 0) {
+            firstPage();
+        } else if (pos > logLength) {
             lastPage();
         } else {
-            firstPage();
+            seek(pos);
         }
-        break;
-    }
-    console.log(e.keyCode);
-});
+    });
+
+    document.addEventListener("wheel", function (e) {
+        if (e.deltaY > 0) {
+            nextPage();
+            setTail(false);
+        } else if (e.deltaY < 0) {
+            prevPage();
+            setTail(false);
+        }
+    });
+
+    document.addEventListener("keydown", function (e) {
+        switch (e.keyCode) {
+            case 35: // end
+                lastPage();
+                setTail(false);
+                break;
+            case 36: // home
+                firstPage();
+                setTail(false);
+                break;
+            case 40: // down
+            case 74: // j
+                nextLine();
+                setTail(false);
+                break;
+            case 33: // page up
+            case 38: // up
+                setTail(false);
+                prevPage();
+                break;
+            case 32: // space
+            case 34: // page down
+                setTail(false);
+                nextPage();
+                break;
+            case 70: // f
+                if (e.shiftKey) {
+                    setTail(true);
+                } else {
+                    setTail(false);
+                    nextPage();
+                }
+                break;
+            case 71: // g
+                setTail(false);
+                if (e.shiftKey) {
+                    lastPage();
+                } else {
+                    firstPage();
+                }
+                break;
+        }
+        console.log(e.keyCode);
+    });
 </script>
 
 </html>
