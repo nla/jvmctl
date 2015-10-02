@@ -499,6 +499,9 @@ def enable(node):
 @cli_command(group="Process management")
 def restart(node):
     """stop and then start the jvm"""
+    if os.getuid() != 0:
+        print("restart requires sudo")
+        sys.exit(1)
     node.ensure_valid()
     node.autoregister()
     sys.exit(node.spawnctl('restart'))
