@@ -1,16 +1,65 @@
 <!doctype html>
 <html>
-<meta charset="utf-8">
+<head>
+    <meta charset="utf-8">
+    <title>Log Viewer</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
 
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .viewdoc {
+            font-family: monospace;
+            white-space: pre;
+            font-size: 14px;
+            line-height: 18px;
+        }
+
+        .viewouter {
+            display: flex;
+            align-items: stretch;
+            flex-direction: row;
+            height: 100px;
+            flex-grow: 1;
+        }
+
+        .viewbox {
+            flex-grow: 2;
+            overflow-x: scroll;
+            overflow-y: hidden;
+            width: 0;
+        }
+
+        .scrollbar {
+            background: #ccc;
+            width: 13px;
+        }
+
+        .scrollbar > .handle {
+            background: #888;
+            width: auto;
+            height: 40px;
+            margin: 2px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
 <body>
 <div class="container">
     <div class="toolbar">
-        <button onclick="firstPage(); setTail(false);">Start</button>
-        <button onclick="prevPage(); setTail(false);">Prev Page</button>
-        <input id="positionTextbox" size="8" onchange="seek(parseInt(this.value)); setTail(false)"> / <span
+        <button onclick="seek(0)">Start</button>
+        <button onclick="seekLines(-page.lines)">Prev Page</button>
+        <input id="positionTextbox" size="8" onchange="seek(parseInt(this.value))"> / <span
             id="lengthSpan"></span> bytes
-        <button onclick="nextPage(); setTail(false);">Next Page</button>
-        <button onclick="lastPage()">End</button>
+        <button onclick="seekLines(page.lines)">Next Page</button>
+        <button onclick="seekToEnd()">End</button>
         <label><input id="tailCheckbox" type="checkbox" onchange="setTail(this.checked)"> Follow tail</label>
     </div>
     <div class="viewouter">
@@ -25,72 +74,110 @@
         </div>
     </div>
 </div>
-</body>
-
-<style>
-
-    html, body {
-        height: 100%;
-        margin: 0;
-    }
-
-    .container {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
-    .viewdoc {
-        font-family: monospace;
-        white-space: pre;
-        font-size: 14px;
-        line-height: 18px;
-    }
-
-    .viewouter {
-        display: flex;
-        align-items: stretch;
-        flex-direction: row;
-        height: 100px;
-        flex-grow: 1;
-    }
-
-    .viewbox {
-        flex-grow: 2;
-        overflow-x: scroll;
-        overflow-y: hidden;
-        width: 0;
-    }
-
-    .scrollbar {
-        background: #ccc;
-        width: 13px;
-    }
-
-    .scrollbar > .handle {
-        background: #888;
-        width: auto;
-        height: 40px;
-        margin: 2px;
-        border-radius: 5px;
-    }
-</style>
 
 <script>
-    var logUrl = '/logs/vmstat.log';
+    /*
+     * We load a 64 KB chunk of the file and then render a portion of it as a
+     * page. This allows us to size the page based on line count rather than
+     * byte count and the portion of the chunk before and after the page is
+     * used to calculate byte offsets when seeking by N lines.
+     *
+     *   +---------+ chunk.start    ---               ---
+     *   |         |                 |                 |
+     *   |         |                 | page.offset     |
+     *   |         |                 |                 |
+     *   +---------+ page.start     ---                |
+     *   |         |                 |                 | chunk.length
+     *   |  page   |                 | page.length     |
+     *   |         |                 |                 |
+     *   +---------+                ---                |
+     *   |         |                                   |
+     *   |         |                                   |
+     *   |         |                                   |
+     *   +---------+                                  ---
+     *        :
+     */
     var viewer = document.getElementById("viewer");
     var positionTextbox = document.getElementById("positionTextbox");
     var scrollHandle = document.getElementById("scrollHandle");
-    var fetchSize = 32768;
-    var linesToShow = 64;
+    var lineHeight = parseFloat(getComputedStyle(viewer).lineHeight);
 
-    var startOfPage;
-    var endOfPage;
-    var endOfLine;
-    var logLength;
+    var chunkSize = 65536;
+
     var tailInterval = null;
 
-    function queryFileLength(url, callback) {
+    var file = {
+        url: "log.txt",
+        length: 0,
+    };
+    var chunk = {
+        start: 0,
+        length: 0,
+        data: "",
+    };
+    var page = {
+        start: 0,
+        length: 0,
+    };
+
+    function findStartOfLine(data, position) {
+        var i = data.lastIndexOf("\n", position);
+        return i === -1 ? position : i + 1;
+    }
+
+    function nthIndexOf(haystack, needle, startAt, n) {
+        if (startAt >= haystack.length) {
+            return -1;
+        }
+        var pos = startAt - 1;
+        for (var i = 0; i <= n && pos < haystack.length; i++) {
+            pos = haystack.indexOf(needle, pos + 1);
+        }
+        return pos;
+    }
+
+    function nthLastIndexOf(haystack, needle, startAt, n) {
+        var pos = startAt + 1;
+        for (var i = 0; i <= n && pos >= 0; i++) {
+            pos = haystack.lastIndexOf(needle, pos - 1);
+        }
+        return pos;
+    }
+
+    function updateDOM() {
+        viewer.textContent = chunk.data.substring(page.offset, page.offset + page.length);
+        positionTextbox.value = page.start;
+        lengthSpan.textContent = file.length;
+
+        /*
+         * Scrollbar
+         */
+
+        var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
+        var handleSize = vspace * page.length / file.length;
+        if (handleSize < 20) {
+            handleSize = 20;
+        }
+        var handlePosition = Math.floor((vspace - handleSize) * page.start / file.length) + 2;
+        scrollHandle.style.height = handleSize + "px";
+        scrollHandle.style.marginTop = handlePosition + "px";
+    }
+
+    function fetchRange(url, start, length, callback) {
+        var range = start.toString() + '-' + (start + length - 1).toString();
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 206) {
+                var contentRange = xhr.getResponseHeader("Content-Range").replace("bytes ", "");
+                callback(xhr.responseText, parseInt(contentRange.split("-")[0]), parseInt(contentRange.split("/")[1]));
+            }
+        };
+        xhr.open('GET', url);
+        xhr.setRequestHeader('Range', 'bytes=' + range);
+        xhr.send(null);
+    }
+
+    function fetchFileLength(url, callback) {
         var xhr = new XMLHttpRequest();
         xhr.onreadystatechange = function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
@@ -102,136 +189,183 @@
         xhr.send(null);
     }
 
-    function queryFileRange(url, start, length, callback) {
-        console.log("req " + start);
-        var range = start.toString() + '-' + (start + length - 1).toString();
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4 && xhr.status === 206) {
-                var contentRange = xhr.getResponseHeader("Content-Range");
+    function render(position, data, start, fileLength) {
+        file.length = fileLength;
+        chunk.start = start;
+        chunk.length = data.length;
+        chunk.data = data;
 
-                callback(xhr.responseText, contentRange.split("/")[1]);
-            }
-        };
-        xhr.open('GET', url);
-        xhr.setRequestHeader('Range', 'bytes=' + range);
-        xhr.send(null);
-    }
-
-    function nthIndexOf(haystack, needle, n) {
-        var pos = -1;
-        for (var i = 0; i <= n && pos < haystack.length; i++) {
-            pos = haystack.indexOf(needle, pos + 1);
-        }
-        return pos;
-    }
-
-    function nthLastIndexOf(haystack, needle, n) {
-        var pos = haystack.length;
-        for (var i = 0; i <= n && pos >= 0; i++) {
-            pos = haystack.lastIndexOf(needle, pos - 1);
-        }
-        return pos;
-    }
-
-
-    function loadRange(url, start, length, reverse) {
-        queryFileRange(url, start, length, function (text, contentLength) {
-            var lineHeight = parseFloat(getComputedStyle(viewer).lineHeight);
-            var linesToShow = Math.floor(viewer.parentElement.clientHeight / lineHeight) - 1;
-            var i, j;
-            if (reverse) {
-                j = text.length;
-                i = nthLastIndexOf(text, "\n", linesToShow);
-                if (i === -1) {
-                    i = 0;
-                } else {
-                    i++;
-                }
+        /*
+         * Back up to start of the current line.
+         */
+        var precedingLinefeed = data.lastIndexOf("\n", position - chunk.start);
+        if (precedingLinefeed === -1) {
+            if (chunk.start == 0) {
+                page.offset = 0;
             } else {
-                if (text[0] == "\n") {
-                    i = 1;
-                } else {
-                    i = 0;
-                }
-                j = nthIndexOf(text, "\n", linesToShow);
-                if (j === -1) {
-                    j = text.length;
-                }
+                page.offset = position - chunk.start;
             }
-            viewer.textContent = text.substring(i, j);
-            startOfPage = start + i;
-            window.endOfPage = start + j;
-            positionTextbox.value = startOfPage;
-            lengthSpan.textContent = contentLength;
-
-            var k = text.indexOf("\n", i);
-            if (k < 0 || k > j) {
-                k = j;
-            }
-            endOfLine = start + k;
-
-            updateScrollbar(startOfPage, contentLength, j - i);
-            window.logLength = contentLength;
-        });
-    }
-
-    function updateScrollbar(position, length, viewSize) {
-        var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
-        var handleSize = vspace * viewSize / length;
-        if (handleSize < 20) {
-            handleSize = 20;
+        } else {
+            page.offset = precedingLinefeed + 1;
         }
-        var handlePosition = Math.floor((vspace - handleSize) * position / length);
-        scrollHandle.style.height = handleSize + "px";
-        scrollHandle.style.marginTop = handlePosition + "px";
+
+        /*
+         * Calculate the number of bytes in the page based on the number
+         * of lines we can display.
+         */
+        page.lines = Math.floor(viewer.parentElement.clientHeight / lineHeight);
+        var i = nthIndexOf(chunk.data, "\n", page.offset, page.lines - 1);
+        if (i !== -1) {
+            page.length = i - page.offset;
+        } else {
+            /*
+             * We've hit the end of the chunk and didn't have enough lines.
+             * So instead count back from the end.
+             */
+            i = nthLastIndexOf(chunk.data, "\n", chunk.length, page.lines);
+            if (i !== -1) {
+                page.offset = i + 1;
+                page.length = chunk.length - page.offset;
+            } else {
+                /*
+                 * We just don't have enough data at all. Display everything.
+                 */
+                page.offset = 0;
+                page.length = chunk.length - page.offset;
+            }
+        }
+
+        page.start = page.offset + chunk.start;
+
+        updateDOM();
     }
 
-    function seek(pos) {
-        loadRange(logUrl, pos, fetchSize);
-    }
+    function seek(position) {
+        if (position < 0) {
+            position = 0;
+        }
 
-
-    function firstPage() {
-        seek(0);
-    }
-
-    function nextPage() {
-        seek(endOfPage);
-    }
-
-    function nextLine() {
-        seek(endOfLine);
-    }
-
-    function prevLine() {
-        // TODO
-        prevPage();
-    }
-
-    function prevPage() {
-        var length = fetchSize;
-        var start = startOfPage - fetchSize;
+        var start = position - chunkSize / 2;
+        var length = chunkSize;
         if (start < 0) {
+            length = chunkSize + start;
             start = 0;
-            length = startOfPage;
         }
-        loadRange(logUrl, start, length, true);
+
+        var chunkEnd = chunk.start + chunk.length;
+        if (position < chunkEnd - chunkSize / 4
+                && ((position > chunk.start + chunkSize / 4) || chunk.start == 0)) {
+
+            /*
+             * We're still located well within the middle of the current chunk
+             * so don't bother refetching anything.
+             */
+            render(position, chunk.data, chunk.start, file.length);
+
+        } else {
+
+            /*
+             * TODO: Save bandwidth by calculating any overlap in the new range
+             * with the current chunk and only fetch the difference.
+             */
+            fetchRange(file.url, start, length, function (data, start, fileLength) {
+                render(position, data, start, fileLength);
+            });
+        }
     }
 
-    function lastPage() {
-        queryFileLength(logUrl, function (length) {
-            var start = length - fetchSize;
-            if (start < 0) {
-                start = 0;
-            }
-            loadRange(logUrl, start, fetchSize, true);
-        });
+    function seekToEnd() {
+        fetchFileLength(file.url, seek);
     }
+
+    function scrollLines(lines) {
+        var i;
+        if (lines > 0) {
+            i = nthIndexOf(chunk.data, "\n", page.offset, lines - 1);
+            if (i >= 0) {
+                seek(chunk.start + i + 1);
+            } else {
+                /*
+                 * XXX: if we don't find it in the chunk we're just jumping to
+                 * the end of it.  For correctness we'd instead want to move
+                 * the chunk forward and then search again until we find it.
+                 */
+                seek(chunk.start + chunk.length);
+            }
+        } else if (lines < 0) {
+            i = nthLastIndexOf(chunk.data, "\n", page.offset, -lines);
+            if (i >= 0) {
+                seek(chunk.start + i + 1);
+            } else {
+                /*
+                 * XXX: if we don't find it in the chunk we're just jumping to
+                 * the start of it.  For correctness we'd instead want to move
+                 * the chunk backwards and then search again until we find it.
+                 */
+                seek(chunk.start);
+            }
+        }
+    }
+
+    document.addEventListener("keydown", function (e) {
+        switch (e.keyCode) {
+            case 35: // end
+                seekToEnd();
+                break;
+            case 36: // home
+                seek(0);
+                break;
+            case 40: // down
+            case 74: // j
+                scrollLines(1);
+                break;
+            case 38: // up
+                scrollLines(-1);
+                break;
+            case 33: // page up
+                scrollLines(-page.lines);
+                break;
+            case 32: // space
+            case 34: // page down
+                scrollLines(page.lines);
+                break;
+            case 70: // f
+                if (e.shiftKey) {
+                    setTail(true);
+                } else {
+                    scrollLines(page.lines);
+                }
+                break;
+            case 71: // g
+                if (e.shiftKey) {
+                    seekToEnd();
+                } else {
+                    seek(0);
+                }
+                break;
+        }
+        console.log(e.keyCode);
+    });
+
+
+    scrollHandle.parentElement.addEventListener("mousedown", function (event) {
+        var mpos = event.clientY - scrollHandle.parentElement.offsetTop;
+        var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
+        var pos = Math.floor(file.length * mpos / vspace);
+        seek(pos);
+    });
+
+    document.addEventListener("wheel", function (e) {
+        if (e.deltaY > 0) {
+            scrollLines(Math.ceil(e.deltaY / lineHeight));
+        } else if (e.deltaY < 0) {
+            scrollLines(Math.floor(e.deltaY / lineHeight));
+        }
+    });
 
     function setTail(enabled) {
         if (enabled) {
-            window.tailInterval = setInterval(lastPage, 250);
+            tailInterval = setInterval(seekToEnd, 250);
         } else if (tailInterval) {
             clearInterval(tailInterval);
         }
@@ -243,76 +377,9 @@
     if (tailCheckbox.checked) {
         setTail(true);
     } else {
-        firstPage();
+        seek(0);
     }
-
-    scrollHandle.parentElement.addEventListener("mousedown", function (event) {
-        var mpos = event.clientY - scrollHandle.parentElement.offsetTop;
-        var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
-        var pos = Math.floor(logLength * mpos / vspace);
-        if (pos < 0) {
-            firstPage();
-        } else if (pos > logLength) {
-            lastPage();
-        } else {
-            seek(pos);
-        }
-    });
-
-    document.addEventListener("wheel", function (e) {
-        if (e.deltaY > 0) {
-            nextPage();
-            setTail(false);
-        } else if (e.deltaY < 0) {
-            prevPage();
-            setTail(false);
-        }
-    });
-
-    document.addEventListener("keydown", function (e) {
-        switch (e.keyCode) {
-            case 35: // end
-                lastPage();
-                setTail(false);
-                break;
-            case 36: // home
-                firstPage();
-                setTail(false);
-                break;
-            case 40: // down
-            case 74: // j
-                nextLine();
-                setTail(false);
-                break;
-            case 33: // page up
-            case 38: // up
-                setTail(false);
-                prevPage();
-                break;
-            case 32: // space
-            case 34: // page down
-                setTail(false);
-                nextPage();
-                break;
-            case 70: // f
-                if (e.shiftKey) {
-                    setTail(true);
-                } else {
-                    setTail(false);
-                    nextPage();
-                }
-                break;
-            case 71: // g
-                setTail(false);
-                if (e.shiftKey) {
-                    lastPage();
-                } else {
-                    firstPage();
-                }
-                break;
-        }
-        console.log(e.keyCode);
-    });
 </script>
 
+</body>
 </html>
