@@ -40,6 +40,9 @@
         .scrollbar {
             background: #ccc;
             width: 13px;
+            -moz-user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
         }
 
         .scrollbar > .handle {
@@ -48,6 +51,9 @@
             height: 40px;
             margin: 2px;
             border-radius: 5px;
+            -moz-user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
         }
     </style>
 </head>
@@ -348,11 +354,24 @@
     });
 
 
-    scrollHandle.parentElement.addEventListener("mousedown", function (event) {
+    function handleScrollbarEvent(event) {
         var mpos = event.clientY - scrollHandle.parentElement.offsetTop;
         var vspace = scrollHandle.parentElement.clientHeight - 2 - 2;
         var pos = Math.floor(file.length * mpos / vspace);
         seek(pos);
+    }
+
+    scrollHandle.parentElement.addEventListener("mousedown", function (event) {
+        var scrollBar = scrollHandle.parentElement;
+        handleScrollbarEvent(event);
+        scrollBar.setCapture();
+
+        document.onmousemove = handleScrollbarEvent;
+        document.onmouseup = function(e) {
+            document.onmousemove = null;
+            scrollBar.releaseCapture();
+        }
+        scrollBar.style.MozUserSelect = 'none';
     });
 
     document.addEventListener("wheel", function (e) {
