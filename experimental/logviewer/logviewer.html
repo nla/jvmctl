@@ -332,6 +332,12 @@
                 scrollLines(-page.lines);
                 break;
             case 32: // space
+                if (e.shiftKey) {
+                    scrollLines(-page.lines);
+                } else {
+                    scrollLines(page.lines);
+                }
+                break;
             case 34: // page down
                 scrollLines(page.lines);
                 break;
