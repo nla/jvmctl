@@ -476,6 +476,7 @@ def start(node):
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
+    node.spawnctl('enable')
     sys.exit(node.spawnctl('start'))
 
 @cli_command(group="Process management")
