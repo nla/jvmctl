@@ -6,7 +6,17 @@ EL7.  This is a mostly API compatible implementation of them for Python 2.
 from ctypes import (Structure, c_size_t, c_int, c_char_p, c_uint, POINTER,
                     sizeof, c_void_p, CDLL, create_string_buffer, cast,
                     get_errno)
-import os
+import os, socket
+
+try:
+    SO_PASSCRED = socket.SO_PASSCRED
+except AttributeError:
+    SO_PASSCRED = 16
+
+try:
+    SO_PEERCRED = socket.SO_PEERCRED
+except AttributeError:
+    SO_PEERCRED = 17
 
 SCM_RIGHTS = 1
 SCM_CREDENTIALS = 2
