@@ -183,6 +183,38 @@ class LogManager:
             "writers": [writer.save() for writer in self.writers.itervalues()],
         }
 
+class PipeHandler(asyncore.file_dispatcher):
+    """Handles secondary log messages from sources that do not work with
+    sockets.  Unforunately there's no (fast) way to get the pid of the
+    other end of a pipe so we don't log any process metadata.
+    """
+
+    def __init__(self, log_manager, fd, unit, logname):
+        asyncore.file_dispatcher.__init__(fd)
+        os.close(fd)
+
+        self.log_manager = log_manager
+        self.unit = unit
+        self.logname = logname
+
+    def handle_read(self):
+        """Called when data is available for reading."""
+        data = self.recv(8192)
+        meta = Metadata(time=datetime.now(), pid=None,
+            comm=None, unit=self.unit)
+
+        if meta.unit is not None:
+            log = self.log_manager.get(meta.unit, self.logname)
+            log.write(data, meta)
+
+    def save(self):
+        return {
+            "type": "PipeHandler",
+            "fd": self.socket.fileno(),
+            "unit": self.unit,
+            "logname": self.logname
+        }
+
 class Handler(asyncore.dispatcher):
     """Handles incoming log messages from applications."""
 
@@ -195,6 +227,7 @@ class Handler(asyncore.dispatcher):
         self.log_manager = log_manager
         cred = getpeercred(sock)
         self.unit = unit or unit_for_pid(cred.pid)
+        self.header_buffer = header_buffer
 
     def writable(self):
         """Prevent asyncore for waking up constantly: we never need to write"""
@@ -209,6 +242,14 @@ class Handler(asyncore.dispatcher):
 
         fds, cred = parse_ancdata(ancdata)
 
+        if self.header_buffer is not None:
+            self.header_buffer += data
+            if '\n' not in self.header_buffer:
+                return
+            header = json.loads(self.header_buffer)
+
+
+
         meta = Metadata(time=datetime.now(), pid=cred.pid,
             comm=(comm_for_pid(cred.pid) or "unknown"),
             unit=(unit_for_pid(cred.pid) or self.unit))
@@ -222,7 +263,7 @@ class Handler(asyncore.dispatcher):
         return {
             "type": "Handler",
             "fd": self.socket.fileno(),
-            "unit": self.unit
+            "unit": self.unit,
         }
 
 class Server(asyncore.dispatcher):
@@ -296,6 +337,8 @@ class Daemon:
                 self.server = Server(self.log_manager, **dstate)
             elif dtype == 'Handler':
                 Handler(self.log_manager, **dstate)
+            elif dtype == 'PipeHandler':
+                PipeHandler(self.log_manager, **dstate)
 
         # kill our parent and take their place so that nobody notices
         if "parent_to_kill" in state:
