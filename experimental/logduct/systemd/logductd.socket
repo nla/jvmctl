@@ -1,0 +1,10 @@
+[Unit]
+Description=Logduct Socket
+
+[Socket]
+ListenStream=/run/logduct.sock
+SocketMode=0666
+PassCredentials=yes
+
+[Install]
+WantedBy=sockets.target

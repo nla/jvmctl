@@ -1,0 +1,9 @@
+[Unit]
+Description=Logduct Daemon
+
+[Service]
+StandardInput=socket
+StandardOutput=journal
+ExecStart=/usr/bin/logductd
+Restart=always
+User=logger
