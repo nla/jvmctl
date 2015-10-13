@@ -9,8 +9,8 @@ setup(
     packages = find_packages(exclude=['build', 'dist']),
     entry_points = {
       'console_scripts': [
-        'logductd=logduct.daemon.main',
-        'logduct-run=logduct.run.main',
+        'logductd=logduct.daemon:main',
+        'logduct-run=logduct.run:main',
       ],
     },
 )
