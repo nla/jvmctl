@@ -216,6 +216,10 @@ class PipeHandler(asyncore.file_dispatcher):
             log = self.log_manager.get(meta.unit, self.logname)
             log.write(data, meta)
 
+    def writable(self):
+        """Prevent asyncore for waking up constantly: we never need to write"""
+        return False
+
     def save(self):
         return {
             "type": "PipeHandler",
@@ -287,6 +291,10 @@ class Handler(asyncore.dispatcher):
                 else:
                     logname = "stdio"
                 PipeHandler(self.log_manager, fd, self.unit, logname)
+
+    def writable(self):
+        """Prevent asyncore for waking up constantly: we never need to write"""
+        return False
 
     def save(self):
         """Save state for process reloading"""
