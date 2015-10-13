@@ -306,6 +306,9 @@ class Handler(asyncore.dispatcher):
 
 class Server(asyncore.dispatcher):
     """Listens for new logduct connections and accepts them."""
+
+    accepting = True
+
     def __init__(self, log_manager, sock=None, fd=None):
         if fd is not None:
             sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
