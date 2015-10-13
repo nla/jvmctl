@@ -416,4 +416,7 @@ class Daemon:
             asyncore.loop(timeout=self.log_manager.max_idle, count=1)
             self.log_manager.close_idle()
 
-if __name__ == '__main__': Daemon().loop()
+def main():
+    Daemon().loop()
+
+if __name__ == '__main__': main()
