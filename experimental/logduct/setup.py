@@ -7,6 +7,7 @@ setup(
     license = 'MIT',
     url = "https://github.com/nla/jvmctl",
     packages = find_packages(exclude=['build', 'dist']),
+    test_suite = "tests",
     entry_points = {
       'console_scripts': [
         'logductd=logduct.daemon:main',
