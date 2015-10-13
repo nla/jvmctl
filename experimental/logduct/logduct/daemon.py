@@ -351,7 +351,7 @@ class Daemon:
         """Initialise everything afresh, not called when restoring."""
         self.log_manager = LogManager(args.logdir, args.idle, args.trust_blindly)
         if is_a_socket(sys.stdin.fileno()):
-            sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            sock = socket.fromfd(sys.stdin.fileno(), socket.AF_UNIX, socket.SOCK_STREAM)
             sys.stdin.close()
         else:
             sock = args.socket
