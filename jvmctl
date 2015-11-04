@@ -450,6 +450,27 @@ class Node:
         finally:
             f.close()
 
+    def version(self):
+        try:
+            with open(path.join(self.apps_path, "git-revision")) as f:
+                for line in f:
+                    match = re.match('^refs/tags/(.*)', line)
+                    if match: return match.group(1)
+                    match = re.match('^commit (\w{7}).*', line)
+                    if match: return match.group(1)
+        except IOError:
+            pass
+        try:
+            with open(path.join(self.apps_path, "svn-revision")) as f:
+                for line in f:
+                    match = re.match('^URL: .*/tags/(?:[a-z_-]+/)(?:[a-z]+-)([^/]*)$', line)
+                    if match: return match.group(1).strip()
+                    match = re.match('^Revision: (.*)', line)
+                    if match: return 'r' + match.group(1)
+        except IOError:
+            pass
+
+
     def pid(self):
         process = subprocess.Popen(['systemctl', 'show', self.svc, '--property=MainPID'], stdout=subprocess.PIPE)
         out = process.communicate()[0]
@@ -514,6 +535,7 @@ def status(node):
     if port is not None:
         print('URL: http://' + socket.gethostname() + ':' + port)
     print('Webapp path: ' + node.apps_path)
+    print('Version: ' + node.version())
     print('')
     sys.exit(subprocess.call(['systemctl', 'status', node.svc] + sys.argv[3:]))
 
@@ -868,14 +890,17 @@ def iter_nodes():
             yield Node(filename.split('.', 2)[0])
 
 def list_nodes():
-    print('%-30s  %5s  %s' % ('NODE', 'PORT', 'STATUS'))
+    print('%-30s  %7s  %5s  %s' % ('NODE', 'VERSION', 'PORT', 'STATUS'))
     for node in sorted(iter_nodes(), key=lambda node: node.name):
         pid = node.pid()
         if pid:
-            status = 'running as ' + str(pid)
+            status =  'running as ' + str(pid)
         else:
             status = 'stopped'
-        print('%-30s  %5s  %s' % (node.name, node.port(), status))
+        print('%-30s  %7s  %5s  %s' % (node.name,
+            node.version() or "-",
+            node.port() or "-",
+            status))
 
 def die(msg):
     print(sys.argv[0] + ': ' + msg, file=sys.stderr)
