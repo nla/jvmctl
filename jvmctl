@@ -24,6 +24,7 @@ VERSION = '0.0.9'
 # 1. Configuration Parser
 #----------------------------------------------------------------------
 
+SYSTEM_CONF = '/etc/jvmctl.conf'
 CONF_ROOT = '/etc/jvmctl/apps'
 if path.exists('/opt/jetty/conf'):
     CONF_ROOT = '/opt/jetty/conf'
@@ -44,6 +45,7 @@ SOCKET=
 SOCKET_USER=root
 SOCKET_GROUP=root
 SOCKET_MODE=0660
+EXEC_PREFIX=
 
 [systemd.service.Unit]
 After=network.target remote-fs.target
@@ -115,8 +117,14 @@ class Config(SafeConfigParser):
         text = '[jvm]\n' + text
         text = re.sub("(?m)^\s*export\s+", "", text)
         self.readfp(StringIO(DEFAULTS))
+        self.load_system_config()
         self.readfp(StringIO(text))
         self.migrate_legacy()
+
+    def load_system_config(self):
+        if os.path.exists(SYSTEM_CONF):
+            with open(SYSTEM_CONF) as f:
+                self.readfp(f)
 
     def optionxform(self, option):
         """Override optionxform to preserve case"""
@@ -525,6 +533,7 @@ def restart(node):
         print("restart requires sudo")
         sys.exit(1)
     node.ensure_valid()
+    reconfigure(node)
     node.autoregister()
     sys.exit(node.spawnctl('restart'))
 
@@ -535,7 +544,7 @@ def status(node):
     if port is not None:
         print('URL: http://' + socket.gethostname() + ':' + port)
     print('Webapp path: ' + node.apps_path)
-    print('Version: ' + node.version())
+    print('Version: ' + (node.version() or 'uknown'))
     print('')
     sys.exit(subprocess.call(['systemctl', 'status', node.svc] + sys.argv[3:]))
 
@@ -562,6 +571,9 @@ def delete(node):
 @cli_command(group="Debugging")
 def log(node):
     """browse the jvm's log file (use -f to follow tail)"""
+    logfile = '/logs/%s/stdio.log' % (node.name,)
+    if os.path.exists(logfile):
+        os.execvp('less', ['less', '-n +F', logfile])
     if os.getuid() != 0:
         print("Hint: try with sudo")
     if 'SYSTEMD_PAGER' not in os.environ:
@@ -811,7 +823,15 @@ def post_config(node):
                 '-XX:OnOutOfMemoryError=' + os.path.realpath(__file__) + ' oomkill ' + node.name + ' %p']
     jvm_opts += shlex.split(node.config.get('jvm', 'JAVA_OPTS'))
     jvm_opts += node.container.jvm_opts
-    cmd = node.java_home + "/bin/java " + property_opts + ' ' + quote_list(jvm_opts)
+
+    exec_prefix = node.config.get('jvm', 'EXEC_PREFIX')
+    if exec_prefix:
+        cmd = exec_prefix + ' '
+    else:
+        cmd = ''
+
+    cmd += node.java_home + "/bin/java " + property_opts + ' ' + quote_list(jvm_opts)
+
     socket = node.config.get('jvm', 'SOCKET')
     env_file = path.join(node.basedir, 'environment')
     node.config.set('systemd.service.Service', 'WorkingDirectory', node.basedir)

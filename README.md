@@ -45,6 +45,7 @@ JAVA_HOME   | /usr/lib/jvm/java-1.8.0 | path of the Java runtime to use
 JAVA_OPTS   |                | extra options to pass to java (system properties, GC options etc)
 HEAP_SIZE   | 128m           | amount of memory allocated to the jvm
 OOM_EMAIL   | root@localhost | address to email out of memory errors to
+EXEC_PREFIX |                | prefix to append to the executed command-line (use for wrapper scripts)
 
 ### Webapp Options
 
