@@ -46,6 +46,7 @@ SOCKET_USER=root
 SOCKET_GROUP=root
 SOCKET_MODE=0660
 EXEC_PREFIX=
+GC_LOG_OPTS=
 
 [systemd.service.Unit]
 After=network.target remote-fs.target
@@ -821,6 +822,7 @@ def post_config(node):
     property_opts = fmt_properties(properties) + ' ' + fmt_properties(node.container.properties)
     jvm_opts = ['-Xmx' + node.config.get('jvm', 'HEAP_SIZE'),
                 '-XX:OnOutOfMemoryError=' + os.path.realpath(__file__) + ' oomkill ' + node.name + ' %p']
+    jvm_opts += shlex.split(node.config.get('jvm', 'GC_LOG_OPTS'))
     jvm_opts += shlex.split(node.config.get('jvm', 'JAVA_OPTS'))
     jvm_opts += node.container.jvm_opts
 
