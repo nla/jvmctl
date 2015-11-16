@@ -56,6 +56,7 @@ JETTY_VERSION | 9.2.5.v20141112 | Version of jetty to use (will be downloaded au
 PORT          |                | HTTP port for servlet container
 ROOT_URL_PREFIX | /          | path to mount web application under
 NLA_ENVIRON   | devel          | (deprecated) application environment profile
+WEBAPPS_PATH  | /apps/$node    | Directory to search for webapps and war files
 
 ## FAQ
 

@@ -47,6 +47,7 @@ SOCKET_GROUP=root
 SOCKET_MODE=0660
 EXEC_PREFIX=
 GC_LOG_OPTS=
+WEBAPPS_PATH=
 
 [systemd.service.Unit]
 After=network.target remote-fs.target
@@ -238,6 +239,9 @@ class JettyContainer:
             'jetty.base': self.node.basedir
         }
         self.jvm_opts = ['-jar', path.join(self.home, "start.jar")]
+        self.webapps_path = node.config.get('jvm', 'WEBAPPS_PATH')
+        if not self.webapps_path:
+            self.webapps_path = self.node.apps_path
 
     def deploy(self):
         self.fetch_jetty()
@@ -312,10 +316,10 @@ class JettyContainer:
             f.write(node.basedir + "/forwarded.xml\n")
 
     def discover_contexts(self):
-        if not path.exists(self.node.apps_path):
+        if not path.exists(self.webapps_path):
             return
-        for fn in os.listdir(self.node.apps_path):
-            f = path.join(self.node.apps_path, fn)
+        for fn in os.listdir(self.webapps_path):
+            f = path.join(self.webapps_path, fn)
             if fn.startswith('.'):
                 continue
             elif path.isdir(f) or fn.endswith('.war'):
