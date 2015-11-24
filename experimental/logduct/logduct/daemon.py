@@ -82,6 +82,7 @@ class LogWriter:
         self.link_path = "{log_dir}/{unit}/{logname}.log".format(
                 log_dir=log_dir, unit=unit, logname=logname)
         self.last_active = time.time()
+        self.last_write_was_error = False
 
     def save(self):
         return {
@@ -117,19 +118,26 @@ class LogWriter:
 
     def write(self, data, meta):
         """Write a string to the logfile, prefixing new lines with metadata."""
-        self.last_active = time.time()
-        self.open_file(now=meta.time)
-        prefix = format_prefix(meta)
+        try:
+            self.last_active = time.time()
+            self.open_file(now=meta.time)
+            prefix = format_prefix(meta)
 
-        if self.start_of_line:
-            print(prefix, end="", file=self.file)
+            if self.start_of_line:
+                print(prefix, end="", file=self.file)
 
-        if data.endswith("\n"):
-            print(data[:-1].replace('\n', '\n' + prefix), file=self.file)
-            self.start_of_line = True
-        else:
-            print(data.replace('\n', '\n' + prefix), end="", file=self.file)
-            self.start_of_line = False
+            if data.endswith("\n"):
+                print(data[:-1].replace('\n', '\n' + prefix), file=self.file)
+                self.start_of_line = True
+            else:
+                print(data.replace('\n', '\n' + prefix), end="", file=self.file)
+                self.start_of_line = False
+
+            self.last_write_was_error = False
+        except Exception as e:
+            if not self.last_write_was_error:
+                print('Failed to write to', self.path, ':', e, file=sys.stderr)
+                self.last_write_was_error = True
 
     def close(self):
         """Close the log file. Note that the next invocation of write() will
