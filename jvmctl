@@ -540,6 +540,7 @@ def restart(node):
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
+    node.spawnctl('enable')
     sys.exit(node.spawnctl('restart'))
 
 @cli_command(group="Process management")
