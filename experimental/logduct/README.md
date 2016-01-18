@@ -16,3 +16,17 @@ Installing
 ### Just installing immediately
 
     python setup.py install
+
+Configuring
+-----------
+
+Enable and start the socket:
+
+    systemctl enable logductd.socket
+    systemctl start logductd.socket
+
+Add default configuration to /etc/jvmctl.conf:
+
+    [jvm]
+    EXEC_PREFIX = /usr/bin/logduct-run --fd 3:gc
+    GC_LOG_OPTS = -Xloggc:/dev/fd/3
