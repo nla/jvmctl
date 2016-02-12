@@ -110,7 +110,8 @@ class LogWriter:
     def update_link(self):
         """Create or update a symlink to point at the latest rotation."""
         try:
-            os.symlink(self.path, self.link_path)
+            relpath = os.path.relpath(self.path, os.path.dirname(self.link_path))
+            os.symlink(relpath, self.link_path)
         except OSError as e:
             if e.errno == errno.EEXIST:
                 os.unlink(self.link_path)
