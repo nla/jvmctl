@@ -49,7 +49,7 @@ def unit_for_pid(pid):
     """Work out the systemd unit for a process by reading its cgroup."""
     try:
         cgroup = slurp('/proc/%d/cgroup' % pid)
-        match = re.search("1:name=systemd:/system.slice/(?:jvm:)?(.+?).service", cgroup)
+        match = re.search("1:name=systemd:/system.slice/(?:jvm:)?(.+?)\.service", cgroup)
         return match.group(1) if match else None
     except IOError:
         return None
