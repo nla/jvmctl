@@ -467,7 +467,7 @@ class Node:
         try:
             with open(path.join(self.apps_path, "git-revision")) as f:
                 for line in f:
-                    match = re.match('^refs/tags/(.*)', line)
+                    match = re.match('^(?:refs/)?tags/(.*)', line)
                     if match: return match.group(1)
                     match = re.match('^commit (\w{7}).*', line)
                     if match: return match.group(1)
@@ -609,7 +609,7 @@ def new(node):
         print('PORT=' + str(port), file=f)
         print('', file=f)
         print('#REPO=svn://...', file=f)
-        print('#JAVA_OPTS=(-Dfoo=bar)', file=f)
+        print('#JAVA_OPTS=-Dfoo=bar -Dtop.speed=fast', file=f)
         print('#HEAP_SIZE=128m', file=f)
     finally:
         f.close()
