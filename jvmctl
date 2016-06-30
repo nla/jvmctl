@@ -563,6 +563,7 @@ def version(*args):
 def delete(node):
     """delete the jvm's binaries and configuration"""
     node.spawnctl('stop')
+    node.spawnctl('disable')
     if path.exists('/usr/sbin/svccfg'):
         subprocess.call(['/usr/sbin/svccfg', '-s', 'svc:/site/jetty', 'delete', '-f', node.name])
     elif path.exists(path.join('/etc/spawn', node.svc)):
