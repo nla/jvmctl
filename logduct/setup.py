@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "logduct",
-    version = "0.1.0",
+    version = "0.1.1",
     description = "Yet another logging daemon",
     license = 'MIT',
     url = "https://github.com/nla/jvmctl",
