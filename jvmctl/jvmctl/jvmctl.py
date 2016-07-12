@@ -18,7 +18,12 @@ from ConfigParser import SafeConfigParser, RawConfigParser
 from StringIO import StringIO
 from glob import glob
 
-VERSION = '0.0.9'
+
+import pkg_resources  # part of setuptools
+try:
+	VERSION = pkg_resources.require("jvmctl")[0].version
+except pkg_resources.DistributionNotFound:
+	VERSION = 'unknown'
 
 #----------------------------------------------------------------------
 # 1. Configuration Parser

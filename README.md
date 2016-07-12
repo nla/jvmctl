@@ -8,7 +8,7 @@ and debugging tasks.
 ## Installation
 
 1. Install Python 2.7 (you probably already have it)
-2. `cp jvmctl /usr/local/bin`
+2. `cd jvmctl && python setup.py install`
 
 Depending on the applications you want to run you may also want to install a JDK,  version 
 control (git, svn) and build tools (Maven, Gradle).
