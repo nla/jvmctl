@@ -35,6 +35,9 @@ if path.exists('/opt/jetty/conf'):
     CONF_ROOT = '/opt/jetty/conf'
 
 DEFAULTS = """
+[jetty]
+REPO=http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
+
 [jvm]
 CONTAINER=jetty
 HEAP_SIZE=128m
@@ -256,7 +259,7 @@ class JettyContainer:
         """Download the requested version of Jetty"""
         if path.exists(self.home):
             return
-        url = "http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/" + self.version + "/jetty-distribution-" + self.version + ".tar.gz"
+        url = self.node.config.get('jetty','REPO') + self.version + "/jetty-distribution-" + self.version + ".tar.gz"
         if not path.exists(self.cachedir):
             os.makedirs(self.cachedir)
         f = tempfile.mktemp(prefix='jetty-' + self.version + '-', suffix='.tar.gz')
