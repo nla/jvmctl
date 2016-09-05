@@ -858,6 +858,10 @@ def post_config(node):
     node.config.set('systemd.service.Service', 'User', node.config.get('jvm', 'USER'))
     node.config.set('systemd.service.Service', 'ExecStart', cmd.replace('%', '%%%%'))
     if socket:
+            socket_unit = 'jvm:' + node.name + '.socket'
+            old_after = node.config.get('systemd.service.Unit', 'After')
+            node.config.set('systemd.service.Unit', 'After', old_after + ' ' + socket_unit)
+            node.config.set('systemd.service.Unit', 'Requires', socket_unit)
             node.config.set('systemd.service.Service', 'StandardInput', 'socket')
 
 @cli_command(group="Hidden")
