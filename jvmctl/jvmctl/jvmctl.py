@@ -832,6 +832,10 @@ JVM {name} on {hostname} with pid {pid} ran out of memory and was restarted.
     finally:
         smtp.quit()
 
+def set_unless_present(config, section, option, value):
+    if not config.has_option(section, option):
+        config.set(section, option, value)
+
 def post_config(node):
     properties = {
         'jvmctl.node': node.name
@@ -853,16 +857,18 @@ def post_config(node):
 
     socket = node.config.get('jvm', 'SOCKET')
     env_file = path.join(node.basedir, 'environment')
-    node.config.set('systemd.service.Service', 'WorkingDirectory', node.basedir)
-    node.config.set('systemd.service.Service', 'EnvironmentFile', env_file)
-    node.config.set('systemd.service.Service', 'User', node.config.get('jvm', 'USER'))
-    node.config.set('systemd.service.Service', 'ExecStart', cmd.replace('%', '%%%%'))
+
+    set_unless_present(node.config, 'systemd.service.Service', 'WorkingDirectory', node.basedir)
+    set_unless_present(node.config, 'systemd.service.Service', 'EnvironmentFile', env_file)
+    set_unless_present(node.config, 'systemd.service.Service', 'User', node.config.get('jvm', 'USER'))
+    set_unless_present(node.config, 'systemd.service.Service', 'ExecStart', cmd.replace('%', '%%%%'))
+
     if socket:
             socket_unit = 'jvm:' + node.name + '.socket'
             old_after = node.config.get('systemd.service.Unit', 'After')
             node.config.set('systemd.service.Unit', 'After', old_after + ' ' + socket_unit)
-            node.config.set('systemd.service.Unit', 'Requires', socket_unit)
-            node.config.set('systemd.service.Service', 'StandardInput', 'socket')
+            set_unless_present(node.config, 'systemd.service.Unit', 'Requires', socket_unit)
+            set_unless_present(node.config, 'systemd.service.Service', 'StandardInput', 'socket')
 
 @cli_command(group="Hidden")
 def systemd_register(node):
