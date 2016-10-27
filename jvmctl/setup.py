@@ -14,4 +14,7 @@ setup(
             'hsperf=jvmctl.hsperf:main',
       ],
     },
+    data_files = [
+     ("/etc/bash_completion.d", ["bash_completion/jvmctl"]),
+    ]
 )
