@@ -382,12 +382,12 @@ class GitRepo(Repo):
         cachekey = re.sub("[@:/]", "_", url)
         gitdir = path.join(os.environ['HOME'], 'gitcache', cachekey)
         if not os.path.exists(gitdir):
-            subprocess.call(['git', 'clone', '--bare', url, gitdir])
+            subprocess.check_call(['git', 'clone', '--bare', url, gitdir])
         env = dict(os.environ)
         env['GIT_DIR'] = gitdir
-        subprocess.call(['git', '--bare', 'fetch', '-f', url, branch], env=env)
-        subprocess.call(['git', 'branch', '-f', 'todeploy', 'FETCH_HEAD'], env=env)
-        subprocess.call(['git', 'clone', '--branch', 'todeploy', gitdir, dest])
+        subprocess.check_call(['git', '--bare', 'fetch', '-f', url, branch], env=env)
+        subprocess.check_call(['git', 'branch', '-f', 'todeploy', 'FETCH_HEAD'], env=env)
+        subprocess.check_call(['git', 'clone', '--branch', 'todeploy', gitdir, dest])
 
         with open(path.join(target, 'git-revision'), 'a') as f:
             f.write(branch + '\n')
