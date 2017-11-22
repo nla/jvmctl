@@ -645,10 +645,44 @@ def config(node):
         die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
     if 'EDITOR' not in os.environ:
         os.environ['EDITOR'] = 'vi'
+    if os.getuid() != 0:
+        die('revert requires sudo')
     result = subprocess.call(['sudoedit', node.config_file])
     reconfigure(node)
+    os.chdir(CONF_ROOT)
+    try:
+        subprocess.check_call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb'))
+    except:
+        subprocess.check_call(['git', 'init'])
+    subprocess.check_call(['git', 'add', node.config_file])
+    if subprocess.call(['git', 'diff-index', '--quiet', 'HEAD']):
+        subprocess.check_call(['git', 'commit', '--author="{0} <{0}@nla.gov.au>"'.format(os.getlogin()), '-m "Config change for {}"'.format(node.name)])
     return result
 
+@cli_command(group="Configuration")
+def changed(node):
+    """show the last change to the config"""
+    os.chdir(CONF_ROOT)
+    if not path.isfile(node.config_file) or subprocess.call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb')): 
+        die(node.config_file + ': not found or not in version control.  Make sure the config exists and has been edited with\njvmctl config '+node.name)
+    hash = subprocess.check_output(['git', 'log', '--grep', node.name, '-n 1', '--pretty=format:%H'])
+    if not hash:
+        die('no changes found for ' + node.name)
+    subprocess.check_call(['git', 'show', hash])
+
+@cli_command(group="Configuration")
+def revert(node):
+    """revert the last change to the config"""
+    os.chdir(CONF_ROOT)
+    if not path.isfile(node.config_file) or subprocess.call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb')): 
+        die(node.config_file + ': not found or not in version control.  Make sure the config exists and has been edited with\njvmctl config '+node.name)
+    if os.getuid() != 0:
+        die('revert requires sudo')
+    hash = subprocess.check_output(['git', 'log', '--grep', node.name, '-n 1', '--pretty=format:%H'])
+    if not hash:
+        die('no changes found for ' + node.name)
+    subprocess.check_call(['git', 'revert', hash, '--no-edit'])
+    
 
 @cli_command(group="Process management")
 def pid(node):
