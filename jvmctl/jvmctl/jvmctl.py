@@ -643,10 +643,10 @@ def config(node):
     """edit the jvm's configuration"""
     if not path.isfile(node.config_file):
         die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    if os.getuid() != 0:
+        die('config requires sudo')
     if 'EDITOR' not in os.environ:
         os.environ['EDITOR'] = 'vi'
-    if os.getuid() != 0:
-        die('revert requires sudo')
     result = subprocess.call(['sudoedit', node.config_file])
     reconfigure(node)
     os.chdir(CONF_ROOT)
@@ -663,26 +663,17 @@ def config(node):
 def changed(node):
     """show the last change to the config"""
     os.chdir(CONF_ROOT)
-    if not path.isfile(node.config_file) or subprocess.call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb')): 
-        die(node.config_file + ': not found or not in version control.  Make sure the config exists and has been edited with\njvmctl config '+node.name)
-    hash = subprocess.check_output(['git', 'log', '--grep', node.name, '-n 1', '--pretty=format:%H'])
-    if not hash:
-        die('no changes found for ' + node.name)
+    hash = fetch_hash(node)
     subprocess.check_call(['git', 'show', hash])
 
 @cli_command(group="Configuration")
 def revert(node):
     """revert the last change to the config"""
     os.chdir(CONF_ROOT)
-    if not path.isfile(node.config_file) or subprocess.call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb')): 
-        die(node.config_file + ': not found or not in version control.  Make sure the config exists and has been edited with\njvmctl config '+node.name)
     if os.getuid() != 0:
         die('revert requires sudo')
-    hash = subprocess.check_output(['git', 'log', '--grep', node.name, '-n 1', '--pretty=format:%H'])
-    if not hash:
-        die('no changes found for ' + node.name)
+    hash = fetch_hash(node)
     subprocess.check_call(['git', 'revert', hash, '--no-edit'])
-    
 
 @cli_command(group="Process management")
 def pid(node):
@@ -959,6 +950,17 @@ WantedBy=sockets.target
 def run(node):
     """run the application interactively"""
     pass
+
+def fetch_hash(node):
+    if not path.isfile(node.config_file):
+        die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    try:
+        hash = subprocess.check_output(['git', 'log', '-n 1', '--pretty=format:%H', node.config_file])
+    except:
+        die('{} was not found in version control.  Try editing the config with \n jvmctl config {}'.format(node.config_file, node.name))
+    if not hash:
+        die('no changes found for ' + node.name)
+    return hash
 
 def switchuid(uid, gid):
     def f():
