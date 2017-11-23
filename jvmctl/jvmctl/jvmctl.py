@@ -656,6 +656,8 @@ def config(node):
         subprocess.check_call(['git', 'init'])
     subprocess.check_call(['git', 'add', node.config_file])
     if subprocess.call(['git', 'diff-index', '--quiet', 'HEAD']):
+        os.environ['GIT_COMMITTER_NAME'] = 'jvmctl'
+        os.environ['GIT_COMMITTER_EMAIL'] = 'root@'+os.uname()[1]
         subprocess.check_call(['git', 'commit', '--author="{0} <{0}@nla.gov.au>"'.format(os.getlogin()), '-m "Config change for {}"'.format(node.name)])
     return result
 
