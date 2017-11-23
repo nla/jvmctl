@@ -643,12 +643,39 @@ def config(node):
     """edit the jvm's configuration"""
     if not path.isfile(node.config_file):
         die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    if os.getuid() != 0:
+        die('config requires sudo')
     if 'EDITOR' not in os.environ:
         os.environ['EDITOR'] = 'vi'
     result = subprocess.call(['sudoedit', node.config_file])
     reconfigure(node)
+    os.chdir(CONF_ROOT)
+    try:
+        subprocess.check_call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb'))
+    except:
+        subprocess.check_call(['git', 'init'])
+    subprocess.check_call(['git', 'add', node.config_file])
+    if subprocess.call(['git', 'diff-index', '--quiet', 'HEAD']):
+        os.environ['GIT_COMMITTER_NAME'] = 'jvmctl'
+        os.environ['GIT_COMMITTER_EMAIL'] = 'root@'+os.uname()[1]
+        subprocess.check_call(['git', 'commit', '--author="{0} <{0}@nla.gov.au>"'.format(os.getlogin()), '-m "Config change for {}"'.format(node.name)])
     return result
 
+@cli_command(group="Configuration")
+def changed(node):
+    """show the last change to the config"""
+    os.chdir(CONF_ROOT)
+    hash = fetch_hash(node)
+    subprocess.check_call(['git', 'show', hash])
+
+@cli_command(group="Configuration")
+def revert(node):
+    """revert the last change to the config"""
+    os.chdir(CONF_ROOT)
+    if os.getuid() != 0:
+        die('revert requires sudo')
+    hash = fetch_hash(node)
+    subprocess.check_call(['git', 'revert', hash, '--no-edit'])
 
 @cli_command(group="Process management")
 def pid(node):
@@ -925,6 +952,17 @@ WantedBy=sockets.target
 def run(node):
     """run the application interactively"""
     pass
+
+def fetch_hash(node):
+    if not path.isfile(node.config_file):
+        die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    try:
+        hash = subprocess.check_output(['git', 'log', '-n 1', '--pretty=format:%H', node.config_file])
+    except:
+        die('{} was not found in version control.  Try editing the config with \n jvmctl config {}'.format(node.config_file, node.name))
+    if not hash:
+        die('no changes found for ' + node.name)
+    return hash
 
 def switchuid(uid, gid):
     def f():
