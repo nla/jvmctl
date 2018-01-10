@@ -10,6 +10,7 @@ class Syslog:
         self.sock = None
         self.connect()
         self.max_length = options.max_length
+        self.header = "<%d>1" % (options.facility * 8 + options.severity)
 
     def connect(self):
         if not self.options.host:
@@ -26,13 +27,41 @@ class Syslog:
         self.sock.connect((self.options.host, self.options.port))
 
     def send(self, msg, timestamp, host=socket.getfqdn().split('.')[0], app_name="-", procid="-", msgid="-", structured_data="-"):
-        payload = " ".join(["<1>1", timestamp.isoformat(), host, app_name, procid, msgid, structured_data, msg])
+        payload = " ".join([self.header, timestamp.isoformat(), host, app_name, procid, msgid, structured_data, msg])
         if self.max_length > 0:
             payload = payload[:self.max_length]
         if self.sock is not None:
             self.sock.send(str(len(payload)) + " " + payload)
         else:
             print payload
+
+
+SYSLOG_FACILITIES = {
+    'kern': 0,
+    'user': 1,
+    'mail': 2,
+    'daemon': 3,
+    'auth': 4,
+    'syslog': 5,
+    'lpr': 6,
+    'news': 7,
+    'uucp': 8,
+    'cron': 9,
+    'authpriv': 10,
+    'ftp': 11,
+    'local0': 16,
+    'local1': 17,
+    'local2': 18,
+    'local3': 19,
+    'local4': 20,
+    'local5': 21,
+    'local6': 22,
+    'local7': 23
+}
+
+
+def syslog_facility(s):
+    return SYSLOG_FACILITIES.get(s) or int(s)
 
 
 def parse_options():
@@ -51,7 +80,9 @@ def parse_options():
     parser.add_argument("--time-format", default="%H:%M:%S.%f")
     parser.add_argument("--interval", "-i", default=0.0, type=float, help='interval in seconds to repeat at')
     parser.add_argument("--reset", action="store_true", help="reset state to end of all files")
-    parser.add_argument("--max-length", default=8192, type=int, help='maximum message length (will truncate)')
+    parser.add_argument("--max-length", default=8192, type=int, help='maximum message length to truncate to')
+    parser.add_argument("--facility", default='user', type=syslog_facility, help='syslog facility name or number')
+    parser.add_argument("--severity", default=7, type=int, help='syslog severity level')
     parser.add_argument("fileglob")
     return parser.parse_args(sys.argv[1:])
 
