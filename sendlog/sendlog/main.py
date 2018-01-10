@@ -69,8 +69,8 @@ def save_state(state, path):
 def expand_macros(s):
     now = datetime.now()
     s = s.replace("${YEAR}", str(now.year))
-    s = s.replace("${MONTH}", str(now.month))
-    s = s.replace("${DAY}", str(now.day))
+    s = s.replace("${MONTH}", '%02d' % now.month)
+    s = s.replace("${DAY}", '%02d' % now.day)
     return s
 
 
