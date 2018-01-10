@@ -25,7 +25,7 @@ class Syslog:
                                     cert_reqs=ssl.CERT_NONE if self.options.insecure else ssl.CERT_REQUIRED)
         self.sock.connect((self.options.host, self.options.port))
 
-    def send(self, msg, timestamp, host=socket.getfqdn(), app_name="-", procid="-", msgid="-", structured_data="-"):
+    def send(self, msg, timestamp, host=socket.getfqdn().split('.')[0], app_name="-", procid="-", msgid="-", structured_data="-"):
         payload = " ".join(["<1>1", timestamp.isoformat(), host, app_name, procid, msgid, structured_data, msg])
         if self.max_length > 0:
             payload = payload[:self.max_length]
