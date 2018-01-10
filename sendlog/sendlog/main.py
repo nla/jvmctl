@@ -9,6 +9,7 @@ class Syslog:
         self.options = options
         self.sock = None
         self.connect()
+        self.max_length = options.max_length
 
     def connect(self):
         if not self.options.host:
@@ -26,6 +27,8 @@ class Syslog:
 
     def send(self, msg, timestamp, host=socket.getfqdn(), app_name="-", procid="-", msgid="-", structured_data="-"):
         payload = " ".join(["<1>1", timestamp.isoformat(), host, app_name, procid, msgid, structured_data, msg])
+        if self.max_length > 0:
+            payload = payload[:self.max_length]
         if self.sock is not None:
             self.sock.send(str(len(payload)) + " " + payload)
         else:
@@ -48,6 +51,7 @@ def parse_options():
     parser.add_argument("--time-format", default="%H:%M:%S.%f")
     parser.add_argument("--interval", "-i", default=0.0, type=float, help='interval in seconds to repeat at')
     parser.add_argument("--reset", action="store_true", help="reset state to end of all files")
+    parser.add_argument("--max-length", default=8192, type=int, help='maximum message length (will truncate)')
     parser.add_argument("fileglob")
     return parser.parse_args(sys.argv[1:])
 
