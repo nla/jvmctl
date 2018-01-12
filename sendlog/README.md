@@ -1,8 +1,7 @@
 sendlog
 =======
 
-Small Python tool which polls log files for new lines, parses timestamps and
-sends securely to a central syslog server.
+Poll log files for new lines, parse timestamps and send securely to a central syslog server.
 
 Syslog fields are populated by matching regular expressions against file 
 paths and log lines and extracting as named groups (`msg`, `app_name`,
@@ -72,7 +71,26 @@ Assuming your logs are stored in /var/log/nginx/${sitename}.log:
     --path-regex '/var/log/(?P<app_name>nginx)/(?P<procid>\w+\.log)'
     --line-regex '(?P<msg>\S+ \S+ \S+ \[(?P<date>\d+\/\w+\/\d+):(?P<time>\d+:\d+:\d+) [+-]\d\d\d\d\] "[^"]*" \S+ \S+ "[^"]*" "[^"]*" \S+ https?:\/\/(?P<procid>[^: ]+).*)'
     '/var/log/nginx/*.log'
-    
+
+### Handling syslog server outages
+
+Currently sendlog has no autoreconnect facility itself. If your syslog server
+goes away it exits. We currently recommend running it as a systemd 
+service and enable the restart option:
+
+    Restart=always
+    RestartSec=30s
+
+Installation
+------------
+
+As an RPM:
+
+    python setup.py bdist_rpm
+    rpm -i dist/*.noarch.rpm
+
+Or just copy sendlog/main.py somewhere and run it with Python.
+
 Similar software
 ----------------
 
