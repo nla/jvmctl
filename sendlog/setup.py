@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "sendlog",
-    version = "0.2.0",
+    version = "0.3.0",
     description = "Tail log files and transmit to an RFC5424 syslog server",
     license = 'MIT',
     url = "https://github.com/nla/jvmctl",
