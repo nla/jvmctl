@@ -132,7 +132,7 @@ def poll(options, state, syslog):
         elif new_size < old_size:
             old_offset = 0
 
-        path_date = datetime.strptime(path_match.group("date"), options.date_format).date()
+        groups = path_match.groupdict()
 
         with open(path) as f:
             if old_offset > 0:
@@ -146,11 +146,13 @@ def poll(options, state, syslog):
                     if line[-1] == '\n':
                         match = options.line_regex.match(line)
                         if match:
-                            line_time = datetime.strptime(match.group('time'), options.time_format).time()
-                            timestamp = datetime.combine(path_date, line_time).replace(tzinfo=TZLOCAL)
+                            groups.update(match.groupdict())
+                            line_date = datetime.strptime(groups["date"], options.date_format).date()
+                            line_time = datetime.strptime(groups["time"], options.time_format).time()
+                            timestamp = datetime.combine(line_date, line_time).replace(tzinfo=TZLOCAL)
 
-                            syslog.send(match.group("msg"), timestamp, procid=match.group("procid"),
-                                        app_name=path_match.group("app_name"))
+                            syslog.send(match.group("msg"), timestamp, procid=groups["procid"],
+                                        app_name=groups["app_name"])
                         else:
                             if options.verbose:
                                 print "line excluded by regex:", line[:-1]
