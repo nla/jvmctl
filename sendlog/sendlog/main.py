@@ -80,6 +80,7 @@ def parse_options():
     parser.add_argument("--time-format", default="%H:%M:%S.%f")
     parser.add_argument("--interval", "-i", default=0.0, type=float, help='interval in seconds to repeat at')
     parser.add_argument("--reset", action="store_true", help="reset state to end of all files")
+    parser.add_argument("--first-reset", action="store_true", help="reset if the state file does not exist")
     parser.add_argument("--max-length", default=8192, type=int, help='maximum message length to truncate to')
     parser.add_argument("--facility", default='user', type=syslog_facility, help='syslog facility name or number')
     parser.add_argument("--severity", default=7, type=int, help='syslog severity level')
@@ -171,7 +172,7 @@ def main():
     options = parse_options()
     syslog = Syslog(options)
 
-    if options.reset:
+    if options.reset or (options.first_reset and not os.path.exists(options.statefile)):
         state = reset_state(options)
     else:
         state = load_state(options.statefile)
