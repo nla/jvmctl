@@ -41,6 +41,15 @@ optional arguments:
 
 ```
 
+Testing Configurations
+----------------------
+
+When testing sendlog configurations it's useful to skip sending to the server. If you omit
+the `--host` option then sendlog will instead print the data it would normally send to the
+server to stdout.
+
+It's also a good idea to use the `--verbose` option which will cause sendlog to print lines
+that didn't match the configured regexs.
 
 Examples
 --------
