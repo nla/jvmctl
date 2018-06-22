@@ -41,6 +41,7 @@ REPO=http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
 [jvm]
 CONTAINER=jetty
 HEAP_SIZE=128m
+HEAP_DUMP_OPTS=-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/tmp/${NODE}.hprof.tmp
 USER=webapp
 JAVA_HOME=/usr/lib/jvm/java-1.8.0
 JETTY_VERSION=9.2.5.v20141112
@@ -830,12 +831,12 @@ def reconfigure(node):
 
 @cli_command(group="Hidden")
 def oomkill(node, pid):
-    print('jvmctl oomkill', node.name, pid)
-    pid = int(pid)
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
+    try_kill_jvm(node, pid)
+    heap_dump_file = try_rename_heap_dump(node)
+    send_oom_email(node, pid, heap_dump_file)
+
+
+def send_oom_email(node, pid, heap_dump_file):
     oom_emails = node.config.get('jvm', 'OOM_EMAIL').split()
     mail_from = getpass.getuser() + '@' + socket.gethostname()
     smtp = smtplib.SMTP('localhost')
@@ -848,16 +849,39 @@ Subject: JVM-OOM: {name} @ {hostname}
 
 JVM {name} on {hostname} with pid {pid} ran out of memory and was restarted.
 
+Heap dump: {heap_dump_file}
+
 --
 {script}\n""".format(mail_from=mail_from,
                      mail_to=mail_to,
                      name=node.name,
                      pid=pid,
                      hostname=socket.gethostname(),
+                     heap_dump_file=heap_dump_file,
                      script=path.realpath(__file__))
             smtp.sendmail(mail_from, mail_to, message)
     finally:
         smtp.quit()
+
+
+def try_rename_heap_dump(node):
+    "Rename the heap dump file. Replacing any previous so we only keep the latest."
+    try:
+        permfile = '/var/tmp/%s.hprof' % node.name
+        os.rename('/var/tmp/%s.hprof.tmp' % node.name, permfile)
+        return permfile
+    except OSError:
+        return None
+
+
+def try_kill_jvm(node, pid):
+    print('jvmctl oomkill', node.name, pid)
+    pid = int(pid)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
 
 def set_unless_present(config, section, option, value):
     if not config.has_option(section, option):
@@ -870,6 +894,7 @@ def post_config(node):
     property_opts = fmt_properties(properties) + ' ' + fmt_properties(node.container.properties)
     jvm_opts = ['-Xmx' + node.config.get('jvm', 'HEAP_SIZE'),
                 '-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill ' + node.name + ' %p']
+    jvm_opts += shlex.split(node.config.get('jvm', 'HEAP_DUMP_OPTS'))
     jvm_opts += shlex.split(node.config.get('jvm', 'GC_LOG_OPTS'))
     jvm_opts += shlex.split(node.config.get('jvm', 'JAVA_OPTS'))
     jvm_opts += node.container.jvm_opts
