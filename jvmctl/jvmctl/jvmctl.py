@@ -865,11 +865,11 @@ Heap dump: {heap_dump_file}
 
 
 def try_rename_heap_dump(node):
-    "Rename the heap dump file. Replacing any previous so we only keep the latest."
+    "Rename the temporary heap dump file. Replace any previous permanent dump file so we only keep the latest."
     try:
-        permfile = '/var/tmp/%s.hprof' % node.name
-        os.rename('/var/tmp/%s.hprof.tmp' % node.name, permfile)
-        return permfile
+        heap_dump_file = '/var/tmp/%s.hprof' % node.name
+        os.rename(heap_dump_file + '.tmp', heap_dump_file)
+        return heap_dump_file
     except OSError:
         return None
 
