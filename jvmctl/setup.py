@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "jvmctl",
-    version = "0.4.4",
+    version = "0.5.0",
     description = "Deploying and manage Java applications on EL7 servers",
     license = 'MIT',
     url = "https://github.com/nla/jvmctl",
