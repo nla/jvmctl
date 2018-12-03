@@ -17,7 +17,9 @@ from os import path
 from ConfigParser import SafeConfigParser, RawConfigParser
 from StringIO import StringIO
 from glob import glob
+from systemd import journal
 
+auditStream = journal.stream('jvmctl')
 
 import pkg_resources  # part of setuptools
 try:
@@ -520,16 +522,19 @@ def start(node):
     reconfigure(node)
     node.autoregister()
     node.spawnctl('enable')
+    auditStream.write("Start node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     sys.exit(node.spawnctl('start'))
 
 @cli_command(group="Process management")
 def stop(node):
     """stop the jvm"""
+    auditStream.write("Stop node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     sys.exit(node.spawnctl('stop'))
 
 @cli_command(group="Process management")
 def disable(node):
     """stop the jvm and prevent it from running on startup"""
+    auditStream.write("Disable node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     sys.exit(node.spawnctl('disable'))
 
 @cli_command(group="Process management")
@@ -538,6 +543,7 @@ def enable(node):
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
+    auditStream.write("Enable node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     sys.exit(node.spawnctl('enable'))
 
 @cli_command(group="Process management")
@@ -550,6 +556,7 @@ def restart(node):
     reconfigure(node)
     node.autoregister()
     node.spawnctl('enable')
+    auditStream.write("Restart node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     sys.exit(node.spawnctl('restart'))
 
 @cli_command(group="Process management")
@@ -583,6 +590,7 @@ def delete(node):
     if path.exists(node.config_file):
         print("Removing", node.config_file)
 	os.unlink(node.config_file)
+    auditStream.write("Delete node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
 
 @cli_command(group="Debugging")
 def log(node):
@@ -613,6 +621,8 @@ def new(node):
         die(node.config_file + ': already exists')
     if path.exists(node.apps_path):
         die(node.apps_path + ': already exists')
+    if os.getuid() != 0:
+        die("new requires sudo")
     port = find_new_port()
     f = open(node.config_file, 'w')
     try:
@@ -621,8 +631,20 @@ def new(node):
         print('#REPO=svn://...', file=f)
         print('#JAVA_OPTS=-Dfoo=bar -Dtop.speed=fast', file=f)
         print('#HEAP_SIZE=128m', file=f)
+        print('#HEAP_DUMP_PATH=/var/tmp/${NODE}.hprof', file=f)
+        print('#CONTAINER=jetty',file=f)
+        print('#JAVA_HOME=/usr/lib/jvm/java-1.8.0',file=f)
+        print('#JETTY_VERSION=9.2.5.v20141112',file=f)
+        print('#GIT_BRANCH=HEAD',file=f)
+        print('#NLA_ENVIRON=devel',file=f)
+        print('#USER=webapp',file=f)
+        print('#GIT_BRANCH=HEAD',file=f)
+        print('#NLA_ENVIRON=devel',file=f)
+        print('#ROOT_URL_PREFIX=/',file=f)
+        print('#OOM_EMAIL=root@localhost',file=f)
     finally:
         f.close()
+    auditStream.write("New Node " + node.name + " created by " + os.getlogin());
 
 @cli_command(group="Configuration")
 def show(node):
@@ -650,6 +672,7 @@ def config(node):
         os.environ['EDITOR'] = 'vi'
     result = subprocess.call(['sudoedit', node.config_file])
     reconfigure(node)
+    auditStream.write("Config change for node " + node.name + "/" + str(node.version()) + " by " + os.getlogin())
     os.chdir(CONF_ROOT)
     try:
         subprocess.check_call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb'))
