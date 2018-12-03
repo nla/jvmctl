@@ -766,6 +766,7 @@ def deploy(node):
     target = path.join(workarea, 'target')
     dest = node.apps_path
     pw = pwd.getpwnam('builder')
+    os.chdir('/') # workaround selinux permission problem when we switchuid
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
