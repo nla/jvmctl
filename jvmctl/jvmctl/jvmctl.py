@@ -41,6 +41,7 @@ REPO=http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
 [jvm]
 CONTAINER=jetty
 HEAP_SIZE=128m
+HEAP_DUMP_PATH=/var/tmp/${NODE}.hprof
 USER=webapp
 JAVA_HOME=/usr/lib/jvm/java-1.8.0
 JETTY_VERSION=9.2.5.v20141112
@@ -765,6 +766,7 @@ def deploy(node):
     target = path.join(workarea, 'target')
     dest = node.apps_path
     pw = pwd.getpwnam('builder')
+    os.chdir('/') # workaround selinux permission problem when we switchuid
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
@@ -830,12 +832,12 @@ def reconfigure(node):
 
 @cli_command(group="Hidden")
 def oomkill(node, pid):
-    print('jvmctl oomkill', node.name, pid)
-    pid = int(pid)
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
+    try_kill_jvm(node, pid)
+    try_rename_heap_dump(node)
+    send_oom_email(node, pid)
+
+
+def send_oom_email(node, pid):
     oom_emails = node.config.get('jvm', 'OOM_EMAIL').split()
     mail_from = getpass.getuser() + '@' + socket.gethostname()
     smtp = smtplib.SMTP('localhost')
@@ -848,16 +850,39 @@ Subject: JVM-OOM: {name} @ {hostname}
 
 JVM {name} on {hostname} with pid {pid} ran out of memory and was restarted.
 
+Heap dump path: {heap_dump_path}
+
 --
 {script}\n""".format(mail_from=mail_from,
                      mail_to=mail_to,
                      name=node.name,
                      pid=pid,
                      hostname=socket.gethostname(),
+                     heap_dump_path=node.config.get('jvm', 'HEAP_DUMP_PATH'),
                      script=path.realpath(__file__))
             smtp.sendmail(mail_from, mail_to, message)
     finally:
         smtp.quit()
+
+
+def try_rename_heap_dump(node):
+    "Rename the temporary heap dump file. Replace any previous permanent dump file so we only keep the latest."
+    heap_dump_path = node.config.get('jvm', 'HEAP_DUMP_PATH')
+    if heap_dump_path and os.path.isfile(heap_dump_path + '.tmp'):
+        try:
+            os.rename(heap_dump_path + '.tmp', heap_dump_path)
+        except OSError:
+            pass # if there's a permissions problem or something just give up
+
+
+def try_kill_jvm(node, pid):
+    print('jvmctl oomkill', node.name, pid)
+    pid = int(pid)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
 
 def set_unless_present(config, section, option, value):
     if not config.has_option(section, option):
@@ -870,6 +895,15 @@ def post_config(node):
     property_opts = fmt_properties(properties) + ' ' + fmt_properties(node.container.properties)
     jvm_opts = ['-Xmx' + node.config.get('jvm', 'HEAP_SIZE'),
                 '-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill ' + node.name + ' %p']
+
+    heap_dump_path = node.config.get('jvm', 'HEAP_DUMP_PATH')
+    if heap_dump_path:
+        jvm_opts.append('-XX:+HeapDumpOnOutOfMemoryError')
+        if heap_dump_path.endswith("/") or os.path.isdir(heap_dump_path):
+            jvm_opts.append('-XX:HeapDumpPath=' + heap_dump_path)
+        else:
+            jvm_opts.append('-XX:HeapDumpPath=' + heap_dump_path + ".tmp")
+
     jvm_opts += shlex.split(node.config.get('jvm', 'GC_LOG_OPTS'))
     jvm_opts += shlex.split(node.config.get('jvm', 'JAVA_OPTS'))
     jvm_opts += node.container.jvm_opts
