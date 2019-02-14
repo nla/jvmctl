@@ -754,7 +754,7 @@ def build(node, workarea):
             sys.exit(1)
 
 @cli_command(group="Configuration")
-def deploy(node):
+def deploy(node, *args):
     """(re)build and redeploy the application"""
     node.ensure_valid()
     if not os.access('/apps', os.W_OK):
@@ -770,11 +770,16 @@ def deploy(node):
     pid = os.fork()
     if pid == 0:
         switchuid(pw.pw_uid, pw.pw_gid)()
+        if '-s' in args:
+            os.environ['MAVEN_OPTS'] = '-Dmaven.test.skip=true'
         os.environ['HOME'] = pw.pw_dir
         os.environ['WEBAPPS_PATH'] = dest
         os.environ['NODE'] = node.name
         os.environ['WORKAREA'] = workarea
         build(node, workarea)
+        if '-d' in args:
+            print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
+            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'), cwd=workarea)
         sys.exit(0)
     else:
         pid, result = os.wait()
