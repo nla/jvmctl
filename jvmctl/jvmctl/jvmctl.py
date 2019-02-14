@@ -188,7 +188,7 @@ JETTY_CONTEXT_XML = """
     <Set name="loginService">
       <New class="org.eclipse.jetty.security.HashLoginService">
         <Set name="name">Realm</Set>
-        <Set name="config"><SystemProperty name="jetty.home" default="."/>/etc/realm.properties</Set>
+        <Set name="config">/dev/null</Set>
       </New>
     </Set>
   </Get>
@@ -219,7 +219,6 @@ JETTY_HTTP_XML = """<?xml version="1.0"?>
         <Set name="idleTimeout"><Property name="http.timeout" default="30000"/></Set>
         <Set name="soLingerTime"><Property name="http.soLingerTime" default="-1"/></Set>
         <Set name="acceptorPriorityDelta"><Property name="http.acceptorPriorityDelta" default="0"/></Set>
-        <Set name="selectorPriorityDelta"><Property name="http.selectorPriorityDelta" default="0"/></Set>
         <Set name="acceptQueueSize"><Property name="http.acceptQueueSize" default="0"/></Set>
         <Set name="inheritChannel"><Property name="http.inheritChannel" default="true"/></Set>
       </New>
