@@ -728,7 +728,7 @@ def build(node, workarea, args):
 
         if '-d' in args:
             print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
-            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'))
+            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'), env=env)
 
         if path.exists(nla_deploy):
             subprocess.call(['/bin/bash', '-e', 'nla-deploy.sh', target, nla_environ, node.apps_path], env=env)
