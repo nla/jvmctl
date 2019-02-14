@@ -708,7 +708,7 @@ def gcutil(node):
     return subprocess.call([jstat, '-gcutil', str(pid)] + sys.argv[3:],
             preexec_fn=switchuid(stat.st_uid, stat.st_gid))
 
-def build(node, workarea):
+def build(node, workarea, args):
     target = path.join(workarea, 'target')
     os.makedirs(target)
     os.environ['PATH'] = node.config.get('jvm', 'JAVA_HOME') + '/bin:/usr/local/bin:/bin:/usr/bin'
@@ -725,6 +725,10 @@ def build(node, workarea):
 	env = dict(os.environ)
 	for k, v in node.config.items('jvm'):
 		env[k] = v
+
+        if '-d' in args:
+            print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
+            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'))
 
         if path.exists(nla_deploy):
             subprocess.call(['/bin/bash', '-e', 'nla-deploy.sh', target, nla_environ, node.apps_path], env=env)
@@ -776,10 +780,7 @@ def deploy(node, *args):
         os.environ['WEBAPPS_PATH'] = dest
         os.environ['NODE'] = node.name
         os.environ['WORKAREA'] = workarea
-        build(node, workarea)
-        if '-d' in args:
-            print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
-            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'), cwd=workarea)
+        build(node, workarea, args)
         sys.exit(0)
     else:
         pid, result = os.wait()
