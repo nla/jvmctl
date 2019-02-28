@@ -813,7 +813,6 @@ def deploy(node, *args):
             print("Deleting the old version, mwahahaha!")
             shutil.rmtree(olddest)
         node.spawnctl('enable')
-
     else:
         print("Uh.... something seems to have gone wrong starting up")
         print("I'm leaving the old version for you in %s" % olddest)
