@@ -588,7 +588,7 @@ def log(node):
     """browse the jvm's log file (use -f to follow tail)"""
     logfile = '/logs/%s/stdio.log' % (node.name,)
     if os.path.exists(logfile):
-        os.execvp('less', ['less', '-n +F', logfile])
+        os.execvp('less', ['less', '-R -n +F', logfile])
     if os.getuid() != 0:
         print("Hint: try with sudo")
     if 'SYSTEMD_PAGER' not in os.environ:
