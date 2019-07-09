@@ -188,7 +188,7 @@ JETTY_CONTEXT_XML = """
     <Set name="loginService">
       <New class="org.eclipse.jetty.security.HashLoginService">
         <Set name="name">Realm</Set>
-        <Set name="config"><SystemProperty name="jetty.home" default="."/>/etc/realm.properties</Set>
+        <Set name="config">/dev/null</Set>
       </New>
     </Set>
   </Get>
@@ -219,7 +219,6 @@ JETTY_HTTP_XML = """<?xml version="1.0"?>
         <Set name="idleTimeout"><Property name="http.timeout" default="30000"/></Set>
         <Set name="soLingerTime"><Property name="http.soLingerTime" default="-1"/></Set>
         <Set name="acceptorPriorityDelta"><Property name="http.acceptorPriorityDelta" default="0"/></Set>
-        <Set name="selectorPriorityDelta"><Property name="http.selectorPriorityDelta" default="0"/></Set>
         <Set name="acceptQueueSize"><Property name="http.acceptQueueSize" default="0"/></Set>
         <Set name="inheritChannel"><Property name="http.inheritChannel" default="true"/></Set>
       </New>
@@ -589,7 +588,7 @@ def log(node):
     """browse the jvm's log file (use -f to follow tail)"""
     logfile = '/logs/%s/stdio.log' % (node.name,)
     if os.path.exists(logfile):
-        os.execvp('less', ['less', '-n +F', logfile])
+        os.execvp('less', ['less', '-R -n +F', logfile])
     if os.getuid() != 0:
         print("Hint: try with sudo")
     if 'SYSTEMD_PAGER' not in os.environ:
@@ -709,7 +708,7 @@ def gcutil(node):
     return subprocess.call([jstat, '-gcutil', str(pid)] + sys.argv[3:],
             preexec_fn=switchuid(stat.st_uid, stat.st_gid))
 
-def build(node, workarea):
+def build(node, workarea, args):
     target = path.join(workarea, 'target')
     os.makedirs(target)
     os.environ['PATH'] = node.config.get('jvm', 'JAVA_HOME') + '/bin:/usr/local/bin:/bin:/usr/bin'
@@ -726,6 +725,10 @@ def build(node, workarea):
 	env = dict(os.environ)
 	for k, v in node.config.items('jvm'):
 		env[k] = v
+
+        if '-d' in args:
+            print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
+            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'), env=env)
 
         if path.exists(nla_deploy):
             subprocess.call(['/bin/bash', '-e', 'nla-deploy.sh', target, nla_environ, node.apps_path], env=env)
@@ -755,7 +758,7 @@ def build(node, workarea):
             sys.exit(1)
 
 @cli_command(group="Configuration")
-def deploy(node):
+def deploy(node, *args):
     """(re)build and redeploy the application"""
     node.ensure_valid()
     if not os.access('/apps', os.W_OK):
@@ -771,11 +774,13 @@ def deploy(node):
     pid = os.fork()
     if pid == 0:
         switchuid(pw.pw_uid, pw.pw_gid)()
+        if '-s' in args:
+            os.environ['MAVEN_OPTS'] = '-Dmaven.test.skip=true'
         os.environ['HOME'] = pw.pw_dir
         os.environ['WEBAPPS_PATH'] = dest
         os.environ['NODE'] = node.name
         os.environ['WORKAREA'] = workarea
-        build(node, workarea)
+        build(node, workarea, args)
         sys.exit(0)
     else:
         pid, result = os.wait()
@@ -807,6 +812,7 @@ def deploy(node):
         if os.path.exists(olddest):
             print("Deleting the old version, mwahahaha!")
             shutil.rmtree(olddest)
+        node.spawnctl('enable')
     else:
         print("Uh.... something seems to have gone wrong starting up")
         print("I'm leaving the old version for you in %s" % olddest)
