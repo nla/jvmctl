@@ -35,7 +35,7 @@ class PerfData(Structure):
             mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_COPY)
         data = cls.from_buffer(mm)
         data.buflen = len(mm)
-        if data.magic not in (0xcafec0c0L, 0xc0c0fecaL):
+        if data.magic not in (0xcafec0c0, 0xc0c0feca):
             raise ValueError("%s: bad magic (0x%x) not a hsperfdata file" % (path, data.magic))
         if data.major_version != 2:
             raise ValueError("%s: unsupported hsperfdata version: %d.%d" % (path, 
@@ -170,55 +170,55 @@ import argparse, time, sys, itertools, re
 
 def binfmt(n, unit='iB', sep=' '):
     if n == 0:
-	return 0
+        return 0
     for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
-	if n < 1024.0:
-	    return '%3.3g%s%s%s' % (n, sep, prefix, unit)
-	n /= 1024.0
+        if n < 1024.0:
+            return '%3.3g%s%s%s' % (n, sep, prefix, unit)
+        n /= 1024.0
     return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
 
 def sifmt(n, unit='', sep=' '):
     if 0.0 < abs(n) < 1.0:
-	for prefix in ['m', 'μ', 'n', 'p']:
-	    if abs(n) >= 1.0:
-		return '%3.3g%s%s%s' % (n, sep, prefix, unit)
-	    n *= 1000.0
-	return '%3.3g%s%s%s' % (n, sep, 'f', unit)
+        for prefix in ['m', 'μ', 'n', 'p']:
+            if abs(n) >= 1.0:
+                return '%3.3g%s%s%s' % (n, sep, prefix, unit)
+            n *= 1000.0
+        return '%3.3g%s%s%s' % (n, sep, 'f', unit)
     else:
-	for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
-	    if abs(n) < 1000.0:
-		return '%3.3g%s%s%s' % (n, sep, prefix, unit)
-	    n /= 1000.0
-	return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
+        for prefix in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
+            if abs(n) < 1000.0:
+                return '%3.3g%s%s%s' % (n, sep, prefix, unit)
+            n /= 1000.0
+        return '%3.3g%s%s%s' % (n, sep, 'Y', unit)
 
 def timefmt(n, sep=' '):
     if abs(n) < 1.0:
-	return sifmt(n, 's')
+        return sifmt(n, 's')
     for unit, divisor in [('s', 60), ('min', 60), ('hr', 24)]:
-	if abs(n) < divisor:
-	    return '%3.3g%s%s' % (n, sep, unit)
-	n /= divisor
+        if abs(n) < divisor:
+            return '%3.3g%s%s' % (n, sep, unit)
+        n /= divisor
     return '%3.3g%s%s' % (n, sep, 'days')
 
 def fmtb(n, short=False):
     if args.human_readable:
-	return binfmt(n, '' if short else 'iB', '' if short else ' ')
+        return binfmt(n, '' if short else 'iB', '' if short else ' ')
     elif args.si:
-	return sifmt(n, '' if short else 'B', '' if short else ' ')
+        return sifmt(n, '' if short else 'B', '' if short else ' ')
     return str(n)
 
 def fmt(entry):
     if entry.vector_length == 0:
-	if entry.data_unit == UNIT_BYTES:
-	    return fmtb(entry.value)
-	elif entry.data_unit == UNIT_TICKS:
-	    if args.human_readable:
-		return timefmt(entry.value / hrtfreq)
-	    elif args.si:
-		return sifmt(entry.value / hrtfreq, 's')
-	elif entry.data_unit == UNIT_HERTZ:
-	    if args.human_readable or args.si:
-		return sifmt(entry.value, 'Hz')
+        if entry.data_unit == UNIT_BYTES:
+            return fmtb(entry.value)
+        elif entry.data_unit == UNIT_TICKS:
+            if args.human_readable:
+                return timefmt(entry.value / hrtfreq)
+            elif args.si:
+                return sifmt(entry.value / hrtfreq, 's')
+        elif entry.data_unit == UNIT_HERTZ:
+            if args.human_readable or args.si:
+                return sifmt(entry.value, 'Hz')
     return str(entry.value)
 
 def main():
@@ -234,47 +234,47 @@ def main():
     args = parser.parse_args()
 
     if args.pid:
-	data = PerfData.from_pid(args.pid)
+        data = PerfData.from_pid(args.pid)
     elif args.file:
-	data = PerfData.from_file(args.file)
+        data = PerfData.from_file(args.file)
     else:
-	print("%s: --pid or --file must be given" % sys.argv[0], file=sys.stderr)
-	sys.exit(1)
+        print("%s: --pid or --file must be given" % sys.argv[0], file=sys.stderr)
+        sys.exit(1)
 
     if args.count is not None and args.interval <= 0:
-	args.interval = 0.05
+        args.interval = 0.05
 
     hrtfreq = float(data['sun.os.hrt.frequency'].value)
 
 
     i = 1
     while True:
-	if args.free:
-	    if i > 1:
-		print()
-	    if args.human_readable or args.si:
-		spec = '%-6s %8s %8s %8s %6s %8s %8s'
-	    else:
-		spec = '%-6s %12s %12s %12s %6s %12s %12s'
-	    print(spec % ('', 'Size', 'Used', 'Free', 'Use%', 'Max', 'Init'))
-	    for space in data.gc_spaces:
-		print(spec % (space.name.title() + ':',
-			fmtb(space.capacity, short=True),
-			fmtb(space.used, short=True),
-			fmtb(space.free, short=True),
-			'%d%%' % long(space.used * 100 / space.capacity),
-			fmtb(space.max, short=True),
-			fmtb(space.init, short=True)))
-	elif args.key:
-	    print(' '.join(fmt(data[key]) for key in args.key))
-	else:
-	    for entry in data:
-		print(entry.name, '=', fmt(entry))
-	if args.interval > 0 and (args.count is None or i < args.count):
-	    sys.stdout.flush()
-	    time.sleep(args.interval)
-	    i += 1
-	else:
-	    break
+        if args.free:
+            if i > 1:
+                print()
+            if args.human_readable or args.si:
+                spec = '%-6s %8s %8s %8s %6s %8s %8s'
+            else:
+                spec = '%-6s %12s %12s %12s %6s %12s %12s'
+            print(spec % ('', 'Size', 'Used', 'Free', 'Use%', 'Max', 'Init'))
+            for space in data.gc_spaces:
+                print(spec % (space.name.title() + ':',
+                        fmtb(space.capacity, short=True),
+                        fmtb(space.used, short=True),
+                        fmtb(space.free, short=True),
+                        '%d%%' % long(space.used * 100 / space.capacity),
+                        fmtb(space.max, short=True),
+                        fmtb(space.init, short=True)))
+        elif args.key:
+            print(' '.join(fmt(data[key]) for key in args.key))
+        else:
+            for entry in data:
+                print(entry.name, '=', fmt(entry))
+        if args.interval > 0 and (args.count is None or i < args.count):
+            sys.stdout.flush()
+            time.sleep(args.interval)
+            i += 1
+        else:
+            break
 
 if __name__ == '__main__': main()

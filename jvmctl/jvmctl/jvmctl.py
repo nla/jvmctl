@@ -11,15 +11,17 @@
 
 from __future__ import print_function, division
 import os, sys, subprocess, re, socket, shutil, collections
-import time, tempfile, shlex, urlgrabber, urlgrabber.progress
+import time, tempfile, shlex
 import pwd, signal, smtplib, getpass
 from os import path
 try: # python 3
     from configparser import ConfigParser as SafeConfigParser, RawConfigParser
     from io import StringIO
+    from urllib.request import urlretrieve
 except ModuleNotFoundError: # python 2
     from ConfigParser import SafeConfigParser, RawConfigParser
     from StringIO import StringIO
+    from urllib import urlretrieve
 from glob import glob
 
 
@@ -269,8 +271,7 @@ class JettyContainer:
         f = tempfile.mktemp(prefix='jetty-' + self.version + '-', suffix='.tar.gz')
         try:
             print("Downloading Jetty from " + url)
-            meter = urlgrabber.progress.TextMeter()
-            urlgrabber.urlgrab(url, filename=f, progress_obj=meter)
+            urlretrieve(url, f)
             subprocess.check_call(["tar", "-x", "-C", self.cachedir, "-f", f])
         finally:
             os.remove(f)
