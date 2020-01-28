@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import os, asyncore, socket, struct, ctypes, array, re, errno, argparse, time
+import os, asyncore, socket, struct, ctypes, array, re, errno, argparse, time, traceback
 import stat, sys, signal, json
 from collections import namedtuple
-from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS, SO_PASSCRED, SO_PEERCRED
+try: # Python 2
+    from sendmsg import recvmsg, SCM_RIGHTS, SCM_CREDENTIALS, SO_PASSCRED, SO_PEERCRED
+except ModuleNotFoundError: # Python 3
+    from socket import SCM_RIGHTS, SCM_CREDENTIALS, SO_PASSCRED, SO_PEERCRED
+    recvmsg = socket.socket.recvmsg
 from datetime import datetime
 from subprocess import Popen, PIPE
 
@@ -99,11 +103,11 @@ class LogWriter:
                 self.file.close()
             self.path = path
             try:
-                self.file = open(path, 'a', 0)
+                self.file = open(path, 'ab', 0)
             except IOError as e:
                 if e.errno == errno.ENOENT:
                     os.makedirs(os.path.dirname(path))
-                    self.file = open(path, 'a', 0)
+                    self.file = open(path, 'ab', 0)
 
             self.update_link()
 
@@ -122,22 +126,23 @@ class LogWriter:
         try:
             self.last_active = time.time()
             self.open_file(now=meta.time)
-            prefix = format_prefix(meta)
+            prefix = format_prefix(meta).encode()
 
             if self.start_of_line:
-                print(prefix, end="", file=self.file)
+                self.file.write(prefix)
 
-            if data.endswith("\n"):
-                print(data[:-1].replace('\n', '\n' + prefix), file=self.file)
+            if data.endswith(b"\n"):
+                self.file.write(data[:-1].replace(b'\n', b'\n' + prefix) + b'\n')
                 self.start_of_line = True
             else:
-                print(data.replace('\n', '\n' + prefix), end="", file=self.file)
+                self.file.write(data.replace(b'\n', b'\n' + prefix))
                 self.start_of_line = False
 
             self.last_write_was_error = False
         except Exception as e:
             if not self.last_write_was_error:
                 print('Failed to write to', self.path, ':', e, file=sys.stderr)
+                traceback.print_exc(file=sys.stdout)
                 self.last_write_was_error = True
 
     def close(self):
@@ -180,7 +185,7 @@ class LogManager:
         now = time.time()
         if now < self.last_idle_check + self.max_idle:
             return
-        for key, writer in self.writers.items():
+        for key, writer in self.writers.copy().items():
             if writer.last_active + self.max_idle < now:
                 writer.close()
                 del self.writers[key]
@@ -265,7 +270,7 @@ class Handler(asyncore.dispatcher):
         fds, cred = parse_ancdata(ancdata)
 
         if self.header_buffer is not None:
-            self.header_buffer += data
+            self.header_buffer += data.decode()
 
             linefeed = self.header_buffer.find('\n')
             if linefeed == -1:

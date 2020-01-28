@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import socket, os, sys, argparse, array
-from sendmsg import sendmsg, SCM_RIGHTS, SO_PASSCRED
+try: # python2
+    from sendmsg import sendmsg, SCM_RIGHTS, SO_PASSCRED
+except ModuleNotFoundError: # python3
+    from socket import SCM_RIGHTS, SO_PASSCRED
+    sendmsg = socket.socket.sendmsg
 import json
 
 def parse_arguments():
@@ -51,7 +55,7 @@ def redirect_fds(fds, sock, unit):
 
     header = {"unit": unit,
               "lognames": lognames}
-    sendmsg(sock, json.dumps(header) + '\n',
+    sendmsg(sock, [(json.dumps(header) + '\n').encode()],
             [(socket.SOL_SOCKET, SCM_RIGHTS, array.array("i", pipes_to_send))])
 
     for read_end in pipes_to_send:
