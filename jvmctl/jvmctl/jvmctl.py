@@ -499,7 +499,7 @@ class Node:
 
     def pid(self):
         process = subprocess.Popen(['systemctl', 'show', self.svc, '--property=MainPID'], stdout=subprocess.PIPE)
-        out = process.communicate()[0]
+        out = process.communicate()[0].decode("utf-8")
         retcode = process.poll()
         if retcode:
             return None
