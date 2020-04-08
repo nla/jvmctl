@@ -42,7 +42,7 @@ if path.exists('/opt/jetty/conf'):
 
 DEFAULTS = """
 [jetty]
-REPO=http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
+REPO=https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
 
 [jvm]
 CONTAINER=jetty
