@@ -144,7 +144,9 @@ def poll(options, state, syslog):
             leftover = 0
 
             try:
-                for line in f:
+                while True:
+                    line = f.readline()
+                    if not line: break
                     leftover = len(line)
                     if line[-1] == '\n':
                         match = options.line_regex.match(line)
