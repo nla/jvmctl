@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+from __future__ import print_function # python 2 compat
+
 import argparse, ssl, socket, sys, glob, re, os, json, time
 from datetime import datetime
 from dateutil import tz
@@ -33,7 +36,7 @@ class Syslog:
         if self.sock is not None:
             self.sock.send(str(len(payload)) + " " + payload)
         else:
-            print payload
+            print(payload)
 
 
 SYSLOG_FACILITIES = {
@@ -121,13 +124,13 @@ def poll(options, state, syslog):
         path_match = options.path_regex.match(path)
         if not path_match:
             if options.verbose:
-                print "file excluded by regex:", path
+                print("file excluded by regex:", path)
             continue
 
         new_size = os.path.getsize(path)
         if new_size == old_size:
             if options.verbose:
-                print "file size unchanged so skipping:", path
+                print("file size unchanged so skipping:", path)
             continue
         elif new_size < old_size:
             old_offset = 0
@@ -155,7 +158,7 @@ def poll(options, state, syslog):
                                         app_name=groups["app_name"])
                         else:
                             if options.verbose:
-                                print "line excluded by regex:", line[:-1]
+                                print("line excluded by regex:", line[:-1])
                         leftover = 0
             finally:
                 position = f.tell()
