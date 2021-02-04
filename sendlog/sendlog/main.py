@@ -34,7 +34,7 @@ class Syslog:
         if self.max_length > 0:
             payload = payload[:self.max_length]
         if self.sock is not None:
-            self.sock.send(str(len(payload)) + " " + payload)
+            self.sock.send((str(len(payload)) + " " + payload).encode())
         else:
             print(payload)
 
