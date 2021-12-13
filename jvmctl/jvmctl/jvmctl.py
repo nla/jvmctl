@@ -905,7 +905,7 @@ def post_config(node):
     }
     property_opts = fmt_properties(properties) + ' ' + fmt_properties(node.container.properties)
     jvm_opts = ['-Xmx' + node.config.get('jvm', 'HEAP_SIZE'),
-                '-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill ' + node.name + ' %p' + '-Dlog4j2.formatMsgNoLookups=true' ]
+                '-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill ' + node.name + ' %p' + ' -Dlog4j2.formatMsgNoLookups=true' ]
 
     heap_dump_path = node.config.get('jvm', 'HEAP_DUMP_PATH')
     if heap_dump_path:
