@@ -12,10 +12,5 @@ USER root
 COPY . /tmp/
 WORKDIR /tmp
 RUN bash ./nla_install.sh && rm -rf /tmp/*
-# match brahe
-RUN groupadd --system --gid 440 builder
-RUN useradd --system --uid 440 --gid 440 --create-home builder
-RUN getent passwd builder
-USER builder
 
 ENTRYPOINT ["bash", "-c", "/docker-entrypoint.sh"]
