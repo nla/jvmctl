@@ -1,0 +1,23 @@
+_jvmctl_complete() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [ "$COMP_CWORD" -eq 1 ]; then
+      opts="start stop restart config enable disable status add new log deploy show dump version delete lsof pid stack list"
+    else
+      # complete node names
+      for f in /etc/jvmctl/apps/*.conf; do
+        f="${f%%.conf}"
+        f="${f##*/}"
+        opts="$opts $f"
+      done
+    fi
+
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+
+complete -F _jvmctl_complete jettyctl
+complete -F _jvmctl_complete jvmctl

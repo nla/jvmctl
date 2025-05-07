@@ -1,0 +1,10 @@
+#!/bin/bash
+#export http_proxy="http://admin.nla.gov.au:3128"
+#export https_proxy="http://admin.nla.gov.au:3128"
+#export no_proxy="127.0.0.1, localhost, nla.gov.au"
+#export HTTP_PROXY="${http_proxy}"
+#export HTTPS_PROXY="${https_proxy}"
+#export NO_PROXY="${no_proxy}"
+cd $(dirname $0)/..
+/usr/bin/podman build -f Dockerfile -t rpmbuild8
+/usr/bin/podman images | /usr/bin/grep rpmbuild8 | /usr/bin/head -n1 
