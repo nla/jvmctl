@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 #
 # Table Of Contents
@@ -92,8 +92,7 @@ def cli_command(group=None):
 
 def parse_shell_arrays(data):
     """
-    Convert shell array syntax in legacy configs to ConfigParser's indentation based multiline
-    values.
+    Convert shell array syntax in legacy configs to ConfigParser's indentation based multiline values.
     (foo\nbar) => foo\n bar
     """
     out = ""
@@ -105,6 +104,26 @@ def parse_shell_arrays(data):
         pos = m.end()
     out += data[pos:]
     return out
+
+
+def manage_service(action, service_name=""):
+    """
+    Manage systemd services.
+    Use --no-pager so the systemctl status at the end of deploy doesn't just hang, waiting for input.
+    :param:
+        action: str:        Usually enable, disable, start, stop, status, daemon-reload
+        service_name: str:  Can be empty if action is daemon-reload
+        :return :int        Output of subprocess.run
+    """
+    if service_name == 'fapolicyd.service':
+        # we want to the assurity of seeing this restart at the end of the process.
+        print("Running systemctl", action, service_name)
+    if service_name:
+        return subprocess.run(["systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
+    else:
+        # daemon reload doesn't like --no-pager
+        return subprocess.run(["systemctl", action], check=True).returncode
+
 
 class RawConfig(RawConfigParser):
     def optionxform(self, option):
@@ -120,6 +139,7 @@ class RawConfig(RawConfigParser):
                     fp.write("%s=%s\n" %
                              (key, str(value).replace('\n', '\n\t')))
             fp.write("\n")
+
 
 class Config(SafeConfigParser):
     def __init__(self, configfile):
@@ -267,7 +287,7 @@ class JettyContainer:
             return
         url = self.node.config.get('jetty','REPO') + self.version + "/jetty-distribution-" + self.version + ".tar.gz"
         if not path.exists(self.cachedir):
-            os.makedirs(self.cachedir)
+            os.makedirs(self.cachedir, exist_ok=True)
         f = tempfile.mktemp(prefix='jetty-' + self.version + '-', suffix='.tar.gz')
         try:
             print("Downloading Jetty from " + url)
@@ -281,7 +301,7 @@ class JettyContainer:
         """Generate jetty XML configuration"""
         node = self.node
         if not path.exists(node.basedir):
-            os.makedirs(node.basedir)
+            os.makedirs(node.basedir, exist_ok=True)
         if self.version.startswith("8."):
             self.configure_jetty8()
         else:
@@ -459,7 +479,7 @@ class Node:
 
     def spawnctl(self, command):
         if os.path.exists('/usr/bin/systemctl'):
-            return subprocess.call(['systemctl', command, self.svc])
+            manage_service(command, self.svc)
         else:
             return subprocess.call([control_tools_root + '/bin/spawnctl', command, self.svc])
 
@@ -565,7 +585,7 @@ def status(node):
     print('Webapp path: ' + node.apps_path)
     print('Version: ' + (node.version() or 'uknown'))
     print('')
-    sys.exit(subprocess.call(['systemctl', 'status', node.svc] + sys.argv[3:]))
+    manage_service('status', node.svc + ' '.join(sys.argv[3:]))
 
 @cli_command(group="Configuration")
 def version(*args):
@@ -631,11 +651,13 @@ def new(node):
 @cli_command(group="Configuration")
 def show(node):
     """show the jvm's configuration"""
-    f = open(node.config_file)
     try:
-        sys.stdout.write(f.read())
-    finally:
-        f.close()
+        subprocess.run(['less', node.config_file], check=True)
+    except FileNotFoundError:
+        print("\033[31mError\033[0m: 'less' command not found. Please make sure it is installed.")
+    except subprocess.CalledProcessError:
+        print("\033[31mError\033[0m: Could not open or display the file using less.")
+
 
 @cli_command(group="Configuration")
 def dump(node):
@@ -714,8 +736,9 @@ def gcutil(node):
             preexec_fn=switchuid(stat.st_uid, stat.st_gid))
 
 def build(node, workarea, args):
+    """Build the application. We are running as the builder user."""
     target = path.join(workarea, 'target')
-    os.makedirs(target)
+    os.makedirs(target, exist_ok=True)
     os.environ['PATH'] = node.config.get('jvm', 'JAVA_HOME') + '/bin:/usr/local/bin:/bin:/usr/bin'
 
     for repo in node.repos:
@@ -749,7 +772,7 @@ def build(node, workarea, args):
                 else:
                     basename = target,re.sub('\.war$', '', path.basename(war))
                 unpack = path.join(target, basename)
-                os.makedirs(unpack)
+                os.makedirs(unpack, exist_ok=True)
                 subprocess.call(['unzip', '-d', unpack, war])
             if not wars:
                 jars = glob(path.join(moduledir, 'target/*.jar'))
@@ -770,14 +793,15 @@ def deploy(node, *args):
         die("Need permission to write to /apps (maybe try sudo?)")
     node.config # ensure config has been read before dropping privileges
     timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
-    workarea = '/var/tmp/jvmctl-build-%s-%s' % (node.name, timestamp)
+    workarea = '/var/tmp/jvmctl/build-%s-%s' % (node.name, timestamp)
     target = path.join(workarea, 'target')
     dest = node.apps_path
     pw = pwd.getpwnam('builder')
-    os.chdir('/') # workaround selinux permission problem when we switchuid
+    os.chdir('/') # workaround selinux permission problem when we switch uid
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
+        manage_service('stop', 'fapolicyd.service')
         switchuid(pw.pw_uid, pw.pw_gid)()
         if '-s' in args:
             os.environ['MAVEN_OPTS'] = '-Dmaven.test.skip=true'
@@ -785,10 +809,13 @@ def deploy(node, *args):
         os.environ['WEBAPPS_PATH'] = dest
         os.environ['NODE'] = node.name
         os.environ['WORKAREA'] = workarea
-        build(node, workarea, args)
-        sys.exit(0)
+        try:
+            build(node, workarea, args)
+        finally:
+            sys.exit(0)
     else:
         pid, result = os.wait()
+    manage_service('start', 'fapolicyd.service')
     if result != 0:
         die('Build failed. You may inspect ' + workarea)
     if not [f for f in os.listdir(target) if not f.endswith('-revision')]:
@@ -821,7 +848,7 @@ def deploy(node, *args):
     else:
         print("Uh.... something seems to have gone wrong starting up")
         print("I'm leaving the old version for you in %s" % olddest)
-    print()
+    print("")
     status(node)
 
 def quote(s):
@@ -948,7 +975,7 @@ def systemd_register(node):
     post_config(node)
 
     if not path.exists(node.basedir):
-        os.makedirs(node.basedir)
+        os.makedirs(node.basedir, exist_ok=True)
 
     env_file = node.config.get('systemd.service.Service', 'EnvironmentFile')
 
@@ -990,9 +1017,9 @@ WantedBy=sockets.target
     elif path.exists(socket_config):
         os.unlink(socket_config)
 
-    subprocess.call(['systemctl', 'daemon-reload'])
+    manage_service('daemon-reload')
     if socket:
-        subprocess.call(['systemctl', 'enable', node.svc + '.socket'])
+        manage_service('enable', node.svc + '.socket')
 
 @cli_command(group="Debugging")
 def run(node):
