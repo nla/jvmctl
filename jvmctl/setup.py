@@ -4,6 +4,7 @@ setup(
     name = "jvmctl",
     version = "0.8.0",
     description = "Deploying and manage Java applications on RHEL servers",
+    long_description = "Deploying and manage Java applications on RHEL servers",
     license = 'MIT',
     url = "https://github.com/nla/jvmctl",
     packages = ["jvmctl"],
