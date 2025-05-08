@@ -1,7 +1,7 @@
 #!/bin/bash
 # WARNING: This script is designed to run the container in rootless mode (ie: as the user running the script)
 
-VER=9
+VER=8
 Default='\e[0m';Red='\e[31m';Green='\e[32m';Yellow='\e[33m';Cyan='\e[36m';LBlue='\e[94m'
 script_dir=$(dirname $(readlink -f $0))
 cd "${script_dir}"
@@ -24,7 +24,6 @@ read -p "sign 'dist/${DST_RPM}' now ? (y/n): " answer
 case "$answer" in
   [yY])
     rpm --addsign "dist/${DST_RPM}"
-    break
     ;;
   *)
     echo "Please sign dist/${DST_RPM}"
