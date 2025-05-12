@@ -1,58 +1,49 @@
-%define versionfile %(cat VERSION)
-Summary: jvmctl is a tool for deploying and managing Java applications on EL7 servers.
-Name: jvmctl
-Version: %{versionfile}
-Release: 1.el7
-Source0: https://github.com/nla/jvmctl/archive/%{version}/jvmctl-%{version}.tar.gz
+%define name jvmctl
+%define version %(cat VERSION)
+%define release %(cat RELEASE)
+
+Summary: Deploy and manage Java applications on RHEL servers
+Name: %{name}
+Version: %{version}
+Release: %{release}
+Source:  %{expand:%%(pwd)}
 License: MIT
-Vendor: NLA BSS
-Packager: Ross Paine <rpaine@nla.gov.au>
-URL: https://github.com/nla/jvmctl/
-Requires(pre): shadow-utils
+Group: Development/Libraries
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
+Prefix: %{_prefix}
 BuildArch: noarch
+Vendor: NLA BSS
+Packager: ADMINPEH <adminpeh@shire.nla.gov.au>
+Requires: git
+Url: https://github.com/nla/jvmctl
+Distribution: el9
 
-
-%pre
-getent group builder > /dev/null || groupadd -r builder
-getent passwd builder > /dev/null || \
-  useradd -r -g builder -d /opt/jetty -s /sbin/nologin \
-  -c "Builder service account" builder
-exit 0
 
 %description
-jvmctl is a tool for deploying and managing Java applications on EL7 servers.
-It wraps systemd, git, jstack and other tools to provide a friendly
-command-line interface to common deployment, process management and debugging
-tasks.
+Deploying and manage Java applications on RHEL servers
+
+%pre
+/usr/bin/getent group builder > /dev/null || /usr/bin/groupadd -r builder -g 440
+/usr/bin/getent passwd builder > /dev/null || /usr/bin/useradd -r -g builder -u 440 -c "Builder service account" builder
+exit 0
 
 %prep
-
-%setup
-
 %build
 
 %install
-mkdir -p $RPM_BUILD_ROOT/etc/jetty
-mkdir -p $RPM_BUILD_ROOT/opt/bin
-mkdir -p $RPM_BUILD_ROOT/opt/jetty
-pushd $RPM_BUILD_ROOT
-ln -s /etc/jetty ./opt/jetty/conf
-popd
-
-cp -v jvmctl $RPM_BUILD_ROOT/opt/bin
-
-%clean
-rm -fr ${RPM_BUILD_ROOT}
-
-%check
-test -e $RPM_BUILD_ROOT/opt/bin/jvmctl
+/usr/bin/mkdir -p $RPM_BUILD_ROOT%{_bindir}/ $RPM_BUILD_ROOT/etc/bash_completion.d
+/usr/bin/cp %{SOURCEURL0}/%{name}/* $RPM_BUILD_ROOT%{_bindir}/
+/usr/bin/cp %{SOURCEURL0}/bash_completion/* $RPM_BUILD_ROOT/etc/bash_completion.d/
 
 %post
-/usr/sbin/update-alternatives --install /usr/local/bin/jvmctl jvmctl /opt/bin/jvmctl 10 \
-         --slave /usr/local/bin/jettyctl jettyctl /opt/bin/jvmctl
+# Remove site-packages directories, from previous installations
+for dir in $(/usr/bin/ls -d /usr/lib*/python*/site-packages/%{name}* 2>/dev/null)
+do
+  /usr/bin/rm -rf "${dir}" 2>/dev/null
+done
 
 %files
-%defattr(-,root,root)
-/etc/jetty
-/opt
-
+%defattr(644,root,root,755)
+%attr(755, root, root) %{_bindir}/hsperf
+%attr(755, root, root) %{_bindir}/jvmctl
+%attr(644, root, root) /etc/bash_completion.d/jvmctl

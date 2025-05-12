@@ -1049,9 +1049,14 @@ def iter_nodes():
         if filename.endswith('.conf'):
             yield Node(filename.split('.', 2)[0])
 
-def list_nodes():
+@cli_command(group="Debugging")
+def list(app = None):
     print('%-30s  %7s  %5s  %s' % ('NODE', 'VERSION', 'PORT', 'STATUS'))
-    for node in sorted(iter_nodes(), key=lambda node: node.name):
+    if app:
+      nodes = [app]
+    else:
+      nodes = sorted(iter_nodes(), key=lambda node: node.name)
+    for node in nodes:
         pid = node.pid()
         if pid:
             status =  'running as ' + str(pid)
@@ -1080,7 +1085,7 @@ def usage():
 def main():
     if len(sys.argv) == 2:
         if sys.argv[1] == 'list':
-            list_nodes()
+            list()
         elif sys.argv[1] in ('version', '--version'):
             version()
     elif len(sys.argv) < 3:

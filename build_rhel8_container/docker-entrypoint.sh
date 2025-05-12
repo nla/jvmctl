@@ -5,8 +5,9 @@ cd /tmp/rpmbuild/
 dir=$(pwd)
 for script in $(ls rpm_build.sh */rpm_build.sh 2>/dev/null);
 do 
-  echo "Runinng script: ${script} ..."
+  echo "Running script: ${script} ..."
   cd "${dir}/$(dirname "${script}")"
+  chmod +x rpm_build.sh
   # preserve file ownership so the user who ran this can cleanup the files
-  runuser -u $owner bash ./rpm_build.sh
+  runuser -u $owner ./rpm_build.sh
 done

@@ -1,0 +1,32 @@
+Using setup.py for creating RHEL9 RPMs works but running jvmctl will be met with the following error:
+Traceback (most recent call last):
+  File "/usr/bin/jvmctl", line 33, in <module>
+    sys.exit(load_entry_point('jvmctl==0.6.0', 'console_scripts', 'jvmctl')())
+  File "/usr/bin/jvmctl", line 25, in importlib_load_entry_point
+    return next(matches).load()
+StopIteration
+
+The reason turned out to be that the egginfo directory for the previous version was not removed.
+RHEL9 suffers from this but RHEL8 works fine, even with all the extra directories.
+
+On spade there is a rich history of egginfo directories
+drwxr-xr-x. 3 root root 25 May 12 13:45 /usr/lib/python3.6/site-packages/jvmctl
+drwxr-xr-x. 2 root root  6 Dec 13  2021 /usr/lib/python3.6/site-packages/jvmctl-0.5.2-py3.6.egg-info
+drwxr-xr-x. 2 root root  6 Mar  8  2022 /usr/lib/python3.6/site-packages/jvmctl-0.5.3.6-py3.6.egg-info
+drwxr-xr-x. 2 root root  6 Feb 12  2024 /usr/lib/python3.6/site-packages/jvmctl-0.5.4-py3.6.egg-info
+drwxr-xr-x. 2 root root  6 May  8 17:26 /usr/lib/python3.6/site-packages/jvmctl-0.5.7.0_el8-py3.6.egg-info
+drwxr-xr-x. 2 root root  6 May 12 13:45 /usr/lib/python3.6/site-packages/jvmctl-0.6.0-py3.6.egg-info
+
+
+It is quite possible logduct and sendlog may suffer from the same problem.
+
+Attempts were made for a post-install script in setup.py to clean up the extra directories, but nothing worked.
+To combat this, the build for jvmctl was moved to a SPEC file.
+
+To run a build, from the top level jvmctl directory, run:
+    build_rpm_for_RHEL.sh jvmctl 9   (or 8 for RHEL8)
+
+There is a dependancy on the build containers being present, and you may wish to have the bssadmin gpg key imported for signing the RPM
+
+alex.nla.gov.au has the necessary podman setup
+
