@@ -13,10 +13,10 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
 Prefix: %{_prefix}
 BuildArch: noarch
 Vendor: NLA BSS
-Packager: ADMINPEH <adminpeh@shire.nla.gov.au>
+Packager: USER <user@shire.nla.gov.au>
 Requires: git
 Url: https://github.com/nla/jvmctl
-Distribution: el9
+Distribution: elX
 
 
 %description
@@ -50,10 +50,10 @@ done
 
 %changelog
 * Mon May 12 2025 Peter Hine <phine@nla.gov.au> 0.6.0
-- list can now take a parameter, of a current app, like other commands.
-- shutting down fapolicyd on deploy only, and starting back up again, including if build fails.
-- jvmctl show uses less and not splat to the screen.
+- 'list' can now take a parameter, of a current app, like other commands.
+- shutting down fapolicyd on 'deploy' only, and starting back up again, including if build fails.
+- jvmctl 'show' uses 'less' and not splat to the screen.
 - builds take place in /var/tmp/jvmctl/ not some random directory. Better for fapolicyd, if it is used.
 - jvmctl using a spec file to build rather setup.py (files left in place for review). This avoids the problem discussed in jvmctl/README.
- 
+
 

@@ -1,13 +1,13 @@
 # jvmctl
 
-`jvmctl` is a tool for deploying and managing Java applications on EL7
+`jvmctl` is a tool for deploying and managing Java applications on RHEL
 servers.  It wraps systemd, git, jstack and other tools to provide a
 friendly command-line interface to common deployment, process management
 and debugging tasks.
 
 ## Installation
 
-1. Install Python 2.7 (you probably already have it)
+1. Install a version of Python 3 (you probably already have it)
 2. `cd jvmctl && python setup.py install`
 
 Depending on the applications you want to run you may also want to install a JDK,  version 
@@ -75,16 +75,10 @@ See `man journalctl` for more options.  You can also configure journald to
 forward logs to syslog to write to text files or a remote logserver.  See
 `man journald.conf`.
 
-### Why Python 2 and not Python 3/Perl/Ruby/Java/bash/...?
-
-It's installed by default on most servers, starts fast and has a large standard
-library with good error handling and APIs for interacting with OS services. And
-I know it much better than Perl. ;-)
-
 ### How about other OSes?
 
 jvmctl delegates to systemd for process and log management to systemd.  While it
 would be possible to add support for other systems (and indeed our previous
 generation tool did) standardising on one platform has made the code considerably
-simpler.  In future we may consider adding Solaris support again as SMF also
-provides much of the required functionality.
+simpler.
+
