@@ -11,7 +11,7 @@
 
 from __future__ import print_function, division
 import os, sys, subprocess, re, socket, shutil, collections
-import time, tempfile, shlex
+import time, tempfile, shlex, logging
 import pwd, signal, smtplib, getpass
 from os import path
 try: # python 3
@@ -442,6 +442,8 @@ class Node:
     def __init__(self, name):
         if not name:
             raise ValueError('node name cannot be empty')
+        self.logger = logging.getLogger(name)
+        logging.basicConfig(filename='/misc/bss/jvmctl/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
         self.name = name
         self.config_file = path.join(CONF_ROOT, self.name) + '.conf'
         self.svc = 'jvm:' + name
@@ -478,6 +480,11 @@ class Node:
             die(self.config_file + ': syntax error')
 
     def spawnctl(self, command):
+        if command in ['start', 'stop', 'restart']:
+            self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),command,
+                self.version() or "-",
+                self.user or "-",
+                self.java_home or "-"))
         if os.path.exists('/usr/bin/systemctl'):
             manage_service(command, self.svc)
         else:
@@ -533,6 +540,10 @@ class Node:
     def java_home(self):
         return self.config.get('jvm', 'JAVA_HOME')
 
+    @property
+    def user(self):
+        return self.config.get('jvm', 'USER') or self.config.get('jvm', 'JETTY_USER')
+
 #----------------------------------------------------------------------
 # 5. Command-line Interface
 #----------------------------------------------------------------------
@@ -558,7 +569,7 @@ def disable(node):
 
 @cli_command(group="Process management")
 def enable(node):
-    """run the jvm auomatically on startup"""
+    """run the jvm automatically on startup"""
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
@@ -583,7 +594,7 @@ def status(node):
     if port is not None:
         print('URL: http://' + socket.gethostname() + ':' + port)
     print('Webapp path: ' + node.apps_path)
-    print('Version: ' + (node.version() or 'uknown'))
+    print('Version: ' + (node.version() or 'unknown'))
     print('')
     manage_service('status', node.svc + ' '.join(sys.argv[3:]))
 
@@ -1051,7 +1062,7 @@ def iter_nodes():
 
 @cli_command(group="Debugging")
 def list(app = None):
-    print('%-30s  %7s  %5s  %s' % ('NODE', 'VERSION', 'PORT', 'STATUS'))
+    print('%-30s  %7s  %5s  %-10s %-33s %s' % ('NODE', 'VERSION', 'PORT', 'USER', 'JAVA_HOME', 'STATUS'))
     if app:
       nodes = [app]
     else:
@@ -1062,9 +1073,11 @@ def list(app = None):
             status =  'running as ' + str(pid)
         else:
             status = 'stopped'
-        print('%-30s  %7s  %5s  %s' % (node.name,
+        print('%-30s  %7s  %5s  %-10s %-33s %s' % (node.name,
             node.version() or "-",
             node.port() or "-",
+            node.user or "-",
+            node.java_home or "-",
             status))
 
 def die(msg):

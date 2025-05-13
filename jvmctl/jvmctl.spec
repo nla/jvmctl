@@ -49,6 +49,9 @@ done
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Tue May 13 2025 Peter Hine <phine@nla.gov.au> 0.6.1
+- stop, start and restart actions now log to /misc/bss/jvmctl/
+
 * Mon May 12 2025 Peter Hine <phine@nla.gov.au> 0.6.0
 - 'list' can now take a parameter, of a current app, like other commands.
 - shutting down fapolicyd on 'deploy' only, and starting back up again, including if build fails.
