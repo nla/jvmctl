@@ -20,7 +20,7 @@ Distribution: elX
 
 
 %description
-Deploying and manage Java applications on RHEL servers
+Deploy and manage Java applications on RHEL servers
 
 %pre
 /usr/bin/getent group builder > /dev/null || /usr/bin/groupadd -r builder -g 440
@@ -49,6 +49,9 @@ done
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Wed May 14 2025 Peter Hine <phine@nla.gov.au> 0.6.2
+- solve deprecation warnings on RHEL9 for configparser.
+
 * Tue May 13 2025 Peter Hine <phine@nla.gov.au> 0.6.1
 - stop, start and restart actions now log to /misc/bss/jvmctl/
 

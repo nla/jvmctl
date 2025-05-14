@@ -24,7 +24,6 @@ except ModuleNotFoundError: # python 2
     from urllib import urlretrieve
 from glob import glob
 
-
 import pkg_resources  # part of setuptools
 try:
         VERSION = pkg_resources.require("jvmctl")[0].version
@@ -116,13 +115,13 @@ def manage_service(action, service_name=""):
         :return :int        Output of subprocess.run
     """
     if service_name == 'fapolicyd.service':
-        # we want to the assurity of seeing this restart at the end of the process.
-        print("Running systemctl", action, service_name)
+        # We want the assurity of seeing this restart at the end of the process.
+        print("Running /usr/bin/systemctl", action, service_name)
     if service_name:
-        return subprocess.run(["systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
+        return subprocess.run(["/usr/bin/systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
     else:
         # daemon reload doesn't like --no-pager
-        return subprocess.run(["systemctl", action], check=True).returncode
+        return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
 
 
 class RawConfig(RawConfigParser):
@@ -153,15 +152,15 @@ class Config(SafeConfigParser):
         text = parse_shell_arrays(text)
         text = '[jvm]\n' + text
         text = re.sub("(?m)^\s*export\s+", "", text)
-        self.readfp(StringIO(DEFAULTS))
+        self.read_file(StringIO(DEFAULTS))
         self.load_system_config()
-        self.readfp(StringIO(text))
+        self.read_file(StringIO(text))
         self.migrate_legacy()
 
     def load_system_config(self):
         if os.path.exists(SYSTEM_CONF):
             with open(SYSTEM_CONF) as f:
-                self.readfp(f)
+                self.read_file(f)
 
     def optionxform(self, option):
         """Override optionxform to preserve case"""
@@ -481,12 +480,13 @@ class Node:
 
     def spawnctl(self, command):
         if command in ['start', 'stop', 'restart']:
-            self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),command,
+            self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),
+                command,
                 self.version() or "-",
                 self.user or "-",
                 self.java_home or "-"))
         if os.path.exists('/usr/bin/systemctl'):
-            manage_service(command, self.svc)
+            return manage_service(command, self.svc)
         else:
             return subprocess.call([control_tools_root + '/bin/spawnctl', command, self.svc])
 
@@ -523,9 +523,8 @@ class Node:
         except IOError:
             pass
 
-
     def pid(self):
-        process = subprocess.Popen(['systemctl', 'show', self.svc, '--property=MainPID'], stdout=subprocess.PIPE)
+        process = subprocess.Popen(['/usr/bin/systemctl', 'show', self.svc, '--property=MainPID'], stdout=subprocess.PIPE)
         out = process.communicate()[0].decode("utf-8")
         retcode = process.poll()
         if retcode:
@@ -663,11 +662,11 @@ def new(node):
 def show(node):
     """show the jvm's configuration"""
     try:
-        subprocess.run(['less', node.config_file], check=True)
+        subprocess.run(['/usr/bin/less', node.config_file], check=True)
     except FileNotFoundError:
-        print("\033[31mError\033[0m: 'less' command not found. Please make sure it is installed.")
+        print("\033[31mError\033[0m: '/usr/bin/less' command not found. Please make sure it is installed.")
     except subprocess.CalledProcessError:
-        print("\033[31mError\033[0m: Could not open or display the file using less.")
+        print("\033[31mError\033[0m: Could not open or display the file using /usr/bin/less.")
 
 
 @cli_command(group="Configuration")
