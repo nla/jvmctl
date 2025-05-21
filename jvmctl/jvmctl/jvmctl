@@ -14,14 +14,9 @@ import os, sys, subprocess, re, socket, shutil, collections
 import time, tempfile, shlex, logging
 import pwd, signal, smtplib, getpass
 from os import path
-try: # python 3
-    from configparser import ConfigParser as SafeConfigParser, RawConfigParser
-    from io import StringIO
-    from urllib.request import urlretrieve
-except ModuleNotFoundError: # python 2
-    from ConfigParser import SafeConfigParser, RawConfigParser
-    from StringIO import StringIO
-    from urllib import urlretrieve
+from configparser import ConfigParser as SafeConfigParser, RawConfigParser
+from io import StringIO
+from urllib.request import urlretrieve
 from glob import glob
 
 import pkg_resources  # part of setuptools
@@ -38,6 +33,7 @@ SYSTEM_CONF = '/etc/jvmctl.conf'
 CONF_ROOT = '/etc/jvmctl/apps'
 if path.exists('/opt/jetty/conf'):
     CONF_ROOT = '/opt/jetty/conf'
+LOG_DIR = '/misc/bss/jvmctl'
 
 DEFAULTS = """
 [jetty]
@@ -441,8 +437,13 @@ class Node:
     def __init__(self, name):
         if not name:
             raise ValueError('node name cannot be empty')
-        self.logger = logging.getLogger(name)
-        logging.basicConfig(filename='/misc/bss/jvmctl/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
+        if os.getuid() == 0:
+            self.logger = logging.getLogger(name)
+            try:
+                log_dir = self.config.get('jvm', 'LOG_DIR')
+            except AttributeError:
+                log_dir = LOG_DIR
+            logging.basicConfig(filename=log_dir+'/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
         self.name = name
         self.config_file = path.join(CONF_ROOT, self.name) + '.conf'
         self.svc = 'jvm:' + name
@@ -479,7 +480,7 @@ class Node:
             die(self.config_file + ': syntax error')
 
     def spawnctl(self, command):
-        if command in ['start', 'stop', 'restart']:
+        if command in ['start', 'stop', 'restart'] and os.getuid() == 0:
             self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),
                 command,
                 self.version() or "-",
@@ -661,6 +662,7 @@ def new(node):
 @cli_command(group="Configuration")
 def show(node):
     """show the jvm's configuration"""
+    node.ensure_valid()
     try:
         subprocess.run(['/usr/bin/less', node.config_file], check=True)
     except FileNotFoundError:
@@ -729,7 +731,7 @@ def lsof(node):
 
 @cli_command(group="Debugging")
 def stack(node):
-    """print a strack trace for all jvm threads"""
+    """print a stack trace for all jvm threads"""
     pid = node.pid()
     stat = os.stat('/proc/%d' % pid)
     jstack = path.join(node.java_home, 'bin/jstack')
@@ -1067,6 +1069,7 @@ def list(app = None):
     else:
       nodes = sorted(iter_nodes(), key=lambda node: node.name)
     for node in nodes:
+        node.ensure_valid()
         pid = node.pid()
         if pid:
             status =  'running as ' + str(pid)
