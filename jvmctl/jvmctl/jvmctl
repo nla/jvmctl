@@ -1050,13 +1050,13 @@ def iter_nodes():
 
 @cli_command(group="Debugging")
 def list(app = None):
-    print('%-30s  %7s  %5s  %-10s %-33s %s' % ('NODE', 'VERSION', 'PORT', 'USER', 'JAVA_HOME', 'STATUS'))
     if app:
-      nodes = [app]
+        app.ensure_valid()
+        nodes = [app]
     else:
       nodes = sorted(iter_nodes(), key=lambda node: node.name)
+    print('%-30s  %7s  %5s  %-10s %-33s %s' % ('NODE', 'VERSION', 'PORT', 'USER', 'JAVA_HOME', 'STATUS'))
     for node in nodes:
-        node.ensure_valid()
         pid = node.pid()
         if pid:
             status =  'running as ' + str(pid)
