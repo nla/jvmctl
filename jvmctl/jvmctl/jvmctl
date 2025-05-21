@@ -19,12 +19,6 @@ from io import StringIO
 from urllib.request import urlretrieve
 from glob import glob
 
-import pkg_resources  # part of setuptools
-try:
-        VERSION = pkg_resources.require("jvmctl")[0].version
-except pkg_resources.DistributionNotFound:
-        VERSION = 'unknown'
-
 #----------------------------------------------------------------------
 # 1. Configuration Parser
 #----------------------------------------------------------------------
@@ -475,7 +469,7 @@ class Node:
 
     def ensure_valid(self):
         if not path.isfile(self.config_file):
-            die(self.config_file + ': not found')
+            die(self.config_file + ': not found.\nTo create it use: jvmctl ' + self.name + ' new')
         if subprocess.call(['/bin/bash', '-n', self.config_file]) != 0:
             die(self.config_file + ': syntax error')
 
@@ -599,11 +593,6 @@ def status(node):
     manage_service('status', node.svc + ' '.join(sys.argv[3:]))
 
 @cli_command(group="Configuration")
-def version(*args):
-    """print jvmctl version"""
-    print('jvmctl ' + VERSION)
-
-@cli_command(group="Configuration")
 def delete(node):
     """delete the jvm's binaries and configuration"""
     node.spawnctl('stop')
@@ -680,8 +669,7 @@ def dump(node):
 @cli_command(group="Configuration")
 def config(node):
     """edit the jvm's configuration"""
-    if not path.isfile(node.config_file):
-        die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    node.ensure_valid()
     if os.getuid() != 0:
         die('config requires sudo')
     if 'EDITOR' not in os.environ:
@@ -1039,8 +1027,7 @@ def run(node):
     pass
 
 def fetch_hash(node):
-    if not path.isfile(node.config_file):
-        die(node.config_file + ': not found\nTo create it use: jvmctl ' + node.name + ' new')
+    node.ensure_valid()
     try:
         hash = subprocess.check_output(['git', 'log', '-n 1', '--pretty=format:%H', node.config_file])
     except:
@@ -1101,8 +1088,6 @@ def main():
     if len(sys.argv) == 2:
         if sys.argv[1] == 'list':
             list()
-        elif sys.argv[1] in ('version', '--version'):
-            version()
     elif len(sys.argv) < 3:
         usage()
     else:
