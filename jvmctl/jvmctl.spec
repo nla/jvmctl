@@ -23,8 +23,8 @@ Distribution: elX
 Deploy and manage Java applications on RHEL servers
 
 %pre
-/usr/bin/getent group builder > /dev/null || /usr/bin/groupadd -r builder -g 440
-/usr/bin/getent passwd builder > /dev/null || /usr/bin/useradd -r -g builder -u 440 -c "Builder service account" builder
+/usr/bin/getent group builder > /dev/null || /usr/sbin/groupadd -r builder -g 440
+/usr/bin/getent passwd builder > /dev/null || /usr/sbin/useradd -r -g builder -u 440 -c "Builder service account" builder
 exit 0
 
 %prep
@@ -48,8 +48,9 @@ EXEC_PREFIX = /usr/bin/logduct-run --fd 3:gc
 GC_LOG_OPTS = -Xloggc:/dev/fd/3
 LOG_DIR = /misc/bss/jvmctl
 ' >"/etc/%{name}.conf"
-  /usr/sbin/restorecon -F "/etc/%{name}.conf"
 fi
+/usr/bin/mkdir -p /etc/jvmctl/apps
+/usr/sbin/restorecon -F "/etc/%{name}.conf" /etc/jvmctl/apps
 
 %files
 %defattr(644,root,root,755)
@@ -58,9 +59,12 @@ fi
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.5
+- Add changes for python 3.12 regex strings.
+
 * Wed May 21 2025 Peter Hine <phine@nla.gov.au> 0.6.4
 - Protect against trying to open the log when not root.
-- Produce a better error when using 'list' or 'show' with a non existant application.
+- Produce a better error when using 'list' or 'show' with a non existent application.
 
 * Wed May 14 2025 Peter Hine <phine@nla.gov.au> 0.6.3
 - Remove hardcoding of log directory.

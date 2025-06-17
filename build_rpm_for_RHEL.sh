@@ -3,7 +3,7 @@
 
 Default='\e[0m';Red='\e[31m';Green='\e[32m';Yellow='\e[33m';Cyan='\e[36m';LBlue='\e[94m'
 
-[ "${2}"  ] || { echo "$0 <name of rpm=jvmctl|sendlog|logduct> <rhel version=8|9|10>"; exit 1; }
+[ "${2}"  ] || { echo "$0 <name of rpm=jvmctl|sendlog|logduct> <rhel version=8|9|10> [release]"; exit 1; }
 [ -d "${1}" ] || { echo "${1} doesn't exist."; exit 2; }
 case "${2}" in
   8|9|10)
@@ -15,6 +15,9 @@ case "${2}" in
     ;;
 esac
 
+rel="${3}"
+[ "${rel}" ] || rel="1"
+
 script_dir="$(dirname $(readlink -f $0))/${1}"
 cd "${script_dir}"
 
@@ -23,12 +26,13 @@ id=$(/usr/bin/id -u)
 
 name="${1}"
 version=$(/usr/bin/cat VERSION)
-RPM_NAME="${name}-${version}-1.el${OS_VER}.noarch.rpm"
+release="${rel}.el${OS_VER}"
+RPM_NAME="${name}-${version}-${release}.noarch.rpm"
 
 /usr/bin/rm -rf /tmp/${USER}_rpmbuild
 /usr/bin/mkdir -p /tmp/${USER}_rpmbuild
 /usr/bin/rsync -a --delete * /tmp/${USER}_rpmbuild/
-echo "1.el${OS_VER}" >/tmp/${USER}_rpmbuild/RELEASE
+echo "${release}" >/tmp/${USER}_rpmbuild/RELEASE
 
 # Create the script for the container to find
 cat <<SCRIPT >/tmp/${USER}_rpmbuild/rpm_build.sh

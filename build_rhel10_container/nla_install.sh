@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install RHEL8 image for using rpmbuild
+# Install RHEL10 image for using rpmbuild
 
 [ -e /usr/bin/microdnf ] && microdnf install -y python3 rpm-build python3-setuptools
 [ -e /usr/bin/dnf ] && dnf install -y python3 rpm-build python3-setuptools

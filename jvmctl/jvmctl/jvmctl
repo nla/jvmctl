@@ -86,7 +86,7 @@ def parse_shell_arrays(data):
     """
     out = ""
     pos = 0
-    for m in re.finditer("(?m)^(?:\s*|^[^=]*=\s*)\(([^)]*)\)\s*$", data):
+    for m in re.finditer(r"(?m)^(?:\\s*|^[^=]*=\\s*)\(([^)]*)\)\\s*$", data):
         body = m.group(1)
         body = body.replace('\n', '\n ')
         out += data[:m.start(1)] + body
@@ -138,10 +138,10 @@ class Config(SafeConfigParser):
             text = f.read()
         finally:
             f.close()
-        text = re.sub("(?m)^\s*#.*", "", text)
+        text = re.sub(r"(?m)^\\s*#.*", "", text)
         text = parse_shell_arrays(text)
         text = '[jvm]\n' + text
-        text = re.sub("(?m)^\s*export\s+", "", text)
+        text = re.sub(r"(?m)^\\s*export\\s+", "", text)
         self.read_file(StringIO(DEFAULTS))
         self.load_system_config()
         self.read_file(StringIO(text))
@@ -380,11 +380,11 @@ class Repo:
            /whatsit/trunk@1234 => whatsit
            /whatsit
         """
-        module = re.sub('/trunk/*', '', self.url)
-        module = re.sub('/tags/[^/][^/]*/*', '', module)
-        module = re.sub('/*$', '', module)
-        module = re.sub('.*/', '', module)
-        module = re.sub('@[^@/]*$', '', module)
+        module = re.sub(r'/trunk/*', '', self.url)
+        module = re.sub(r'/tags/[^/][^/]*/*', '', module)
+        module = re.sub(r'/*$', '', module)
+        module = re.sub(r'.*/', '', module)
+        module = re.sub(r'@[^@/]*$', '', module)
         if module == 'target' or not module:
             module = self.name
         return module
@@ -393,7 +393,7 @@ class GitRepo(Repo):
     def checkout(self, dest, target):
         branch = self.node.config.get('jvm', 'GIT_BRANCH')
         url = self.url
-        cachekey = re.sub("[@:/]", "_", url)
+        cachekey = re.sub(r"[@:/]", "_", url)
         gitdir = path.join(os.environ['HOME'], 'gitcache', cachekey)
         if not os.path.exists(gitdir):
             subprocess.check_call(['git', 'clone', '--bare', url, gitdir])
@@ -492,7 +492,7 @@ class Node:
         f = open(self.config_file)
         try:
             for line in f:
-                match = re.match('^\s*PORT=["\'(]*([0-9]+).*', line)
+                match = re.match(r'^\\s*PORT=["\'(]*([0-9]+).*', line)
                 if match:
                     return match.group(1)
         finally:
@@ -502,18 +502,18 @@ class Node:
         try:
             with open(path.join(self.apps_path, "git-revision")) as f:
                 for line in f:
-                    match = re.match('^(?:refs/)?tags/(.*)', line)
+                    match = re.match(r'^(?:refs/)?tags/(.*)', line)
                     if match: return match.group(1)
-                    match = re.match('^commit (\w{7}).*', line)
+                    match = re.match(r'^commit (\\w{7}).*', line)
                     if match: return match.group(1)
         except IOError:
             pass
         try:
             with open(path.join(self.apps_path, "svn-revision")) as f:
                 for line in f:
-                    match = re.match('^URL: .*/tags/(?:[a-z_-]+/)(?:[a-z]+-)([^/]*)$', line)
+                    match = re.match(r'^URL: .*/tags/(?:[a-z_-]+/)(?:[a-z]+-)([^/]*)$', line)
                     if match: return match.group(1).strip()
-                    match = re.match('^Revision: (.*)', line)
+                    match = re.match(r'^Revision: (.*)', line)
                     if match: return 'r' + match.group(1)
         except IOError:
             pass
@@ -770,7 +770,7 @@ def build(node, workarea, args):
                 if len(wars) == 1:
                     basename = 'ROOT'
                 else:
-                    basename = target,re.sub('\.war$', '', path.basename(war))
+                    basename = target,re.sub(r'.war$', '', path.basename(war))
                 unpack = path.join(target, basename)
                 os.makedirs(unpack, exist_ok=True)
                 subprocess.call(['unzip', '-d', unpack, war])

@@ -24,9 +24,8 @@ Attempts were made for a post-install script in setup.py to clean up the extra d
 To combat this, the build for jvmctl was moved to a SPEC file.
 
 To run a build, from the top level jvmctl directory, run:
-    build_rpm_for_RHEL.sh jvmctl 9   (or 8 for RHEL8)
+    build_rpm_for_RHEL.sh jvmctl 9   (or 8 for RHEL8, or 10 for RHEL10)
 
 There is a dependancy on the build containers being present, and you may wish to have the bssadmin gpg key imported for signing the RPM
 
 alex.nla.gov.au has the necessary podman setup
-
