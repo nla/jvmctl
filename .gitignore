@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# proxy configuration for your site
+proxy.sh
+
 # C extensions
 *.so
 

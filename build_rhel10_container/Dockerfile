@@ -1,5 +1,6 @@
 # Make a container for building RHEL8 RPMs
-FROM nla-registry-quay-quay.apps.dev-containers.nla.gov.au/nla/ubi10
+#FROM nla-registry-quay-quay.apps.dev-containers.nla.gov.au/nla/ubi10
+FROM registry.access.redhat.com/ubi10/ubi
 
 MAINTAINER Peter Hine <phine@nla.gov.au>
 LABEL vendor="RPM BUILD" \

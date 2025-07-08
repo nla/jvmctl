@@ -59,6 +59,11 @@ fi
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.6
+- Revert changes for python 3.12 regex strings.
+- Remove some python errors in certain cirumstances, and allow the Operating System's error to be seen.
+- list now will show a disabled servcie as disabled, not stopped.
+
 * Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.5
 - Add changes for python 3.12 regex strings.
 

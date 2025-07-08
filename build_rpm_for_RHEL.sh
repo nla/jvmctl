@@ -46,7 +46,7 @@ mkdir -p dist
 if [ -e "${name}.spec" ]
 then
   arch=\$(/usr/bin/awk '/BuildArch:/{print \$2}' "${name}.spec")
-  /usr/bin/sed -i -e "s~^Packager:.*~Packager: \${packager}~" -e "s~Distribution:.*~Distribution: \${distro}~" ${name}.spec 
+  /usr/bin/sed -i -e "s~^Packager:.*~Packager: \${packager}~" -e "s~Distribution:.*~Distribution: \${distro}~" ${name}.spec
   /usr/bin/rpmbuild -bb ${name}.spec
   pwd
   /usr/bin/ls -l "/tmp/rpmbuild/RPMS/\${arch}/"

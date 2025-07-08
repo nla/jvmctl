@@ -86,7 +86,7 @@ def parse_shell_arrays(data):
     """
     out = ""
     pos = 0
-    for m in re.finditer(r"(?m)^(?:\\s*|^[^=]*=\\s*)\(([^)]*)\)\\s*$", data):
+    for m in re.finditer(r"(?m)^(?:\s*|^[^=]*=\s*)\(([^)]*)\)\s*$", data):
         body = m.group(1)
         body = body.replace('\n', '\n ')
         out += data[:m.start(1)] + body
@@ -104,15 +104,18 @@ def manage_service(action, service_name=""):
         service_name: str:  Can be empty if action is daemon-reload
         :return :int        Output of subprocess.run
     """
-    if service_name == 'fapolicyd.service':
-        # We want the assurity of seeing this restart at the end of the process.
-        print("Running /usr/bin/systemctl", action, service_name)
-    if service_name:
-        return subprocess.run(["/usr/bin/systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
-    else:
-        # daemon reload doesn't like --no-pager
-        return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
-
+    try:
+        if service_name == 'fapolicyd.service':
+            # We want the assurity of seeing this restart at the end of the process.
+            print("Running /usr/bin/systemctl", action, service_name)
+        if service_name:
+            return subprocess.run(["/usr/bin/systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
+        else:
+            # daemon reload doesn't like --no-pager
+            return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
+    except subprocess.CalledProcessError:
+        # Remove python error and allow systemctl's error to be seen
+        return 1
 
 class RawConfig(RawConfigParser):
     def optionxform(self, option):
@@ -132,16 +135,16 @@ class RawConfig(RawConfigParser):
 
 class Config(SafeConfigParser):
     def __init__(self, configfile):
-        SafeConfigParser.__init__(self)
+        SafeConfigParser.__init__(self, strict=False)
         f = open(configfile)
         try:
             text = f.read()
         finally:
             f.close()
-        text = re.sub(r"(?m)^\\s*#.*", "", text)
+        text = re.sub(r"(?m)^\s*#.*", "", text)
         text = parse_shell_arrays(text)
         text = '[jvm]\n' + text
-        text = re.sub(r"(?m)^\\s*export\\s+", "", text)
+        text = re.sub(r"(?m)^\s*export\s+", "", text)
         self.read_file(StringIO(DEFAULTS))
         self.load_system_config()
         self.read_file(StringIO(text))
@@ -437,7 +440,10 @@ class Node:
                 log_dir = self.config.get('jvm', 'LOG_DIR')
             except AttributeError:
                 log_dir = LOG_DIR
-            logging.basicConfig(filename=log_dir+'/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
+            try:
+                logging.basicConfig(filename=log_dir+'/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
+            except FileNotFoundError:
+                self.logger = None
         self.name = name
         self.config_file = path.join(CONF_ROOT, self.name) + '.conf'
         self.svc = 'jvm:' + name
@@ -474,7 +480,7 @@ class Node:
             die(self.config_file + ': syntax error')
 
     def spawnctl(self, command):
-        if command in ['start', 'stop', 'restart'] and os.getuid() == 0:
+        if command in ['start', 'stop', 'restart'] and os.getuid() == 0 and self.logger:
             self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),
                 command,
                 self.version() or "-",
@@ -483,7 +489,11 @@ class Node:
         if os.path.exists('/usr/bin/systemctl'):
             return manage_service(command, self.svc)
         else:
-            return subprocess.call([control_tools_root + '/bin/spawnctl', command, self.svc])
+            try:
+                return subprocess.call([control_tools_root + '/bin/spawnctl', command, self.svc])
+            except subprocess.CalledProcessError:
+                # Remove python error and allow systemctl's error to be seen
+                return 1
 
     def autoregister(self):
         systemd_register(self)
@@ -492,7 +502,7 @@ class Node:
         f = open(self.config_file)
         try:
             for line in f:
-                match = re.match(r'^\\s*PORT=["\'(]*([0-9]+).*', line)
+                match = re.match(r'^\s*PORT=["\'(]*([0-9]+).*', line)
                 if match:
                     return match.group(1)
         finally:
@@ -504,7 +514,7 @@ class Node:
                 for line in f:
                     match = re.match(r'^(?:refs/)?tags/(.*)', line)
                     if match: return match.group(1)
-                    match = re.match(r'^commit (\\w{7}).*', line)
+                    match = re.match(r'^commit (\w{7}).*', line)
                     if match: return match.group(1)
         except IOError:
             pass
@@ -1058,10 +1068,14 @@ def list(app = None):
     print('%-30s  %7s  %5s  %-10s %-33s %s' % ('NODE', 'VERSION', 'PORT', 'USER', 'JAVA_HOME', 'STATUS'))
     for node in nodes:
         pid = node.pid()
-        if pid:
-            status =  'running as ' + str(pid)
+        if os.path.exists('/etc/systemd/system/multi-user.target.wants/' + node.svc + '.service'):
+            if pid:
+                status =  'running as ' + str(pid)
+            else:
+                status = 'stopped'
         else:
-            status = 'stopped'
+            status = 'disabled'
+
         print('%-30s  %7s  %5s  %-10s %-33s %s' % (node.name,
             node.version() or "-",
             node.port() or "-",
