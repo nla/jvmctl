@@ -1,0 +1,8 @@
+# Example proxy.sh
+# Copy to proxy.sh in the same directory as proxy.sh_TEMPLATE, and update the entries between the <>
+export http_proxy="http://<your proxy url>:3128"
+export https_proxy="http://<your proxy url>:3128"
+export no_proxy="127.0.0.1, localhost, <your domain>"
+export HTTP_PROXY="${http_proxy}"
+export HTTPS_PROXY="${https_proxy}"
+export NO_PROXY="${no_proxy}"
