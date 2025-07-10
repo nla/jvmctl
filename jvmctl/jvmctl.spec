@@ -59,10 +59,16 @@ fi
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Wed Jul 09 2025 Peter Hine <phine@nla.gov.au> 0.6.7
+- Revert 'show' to using 'cat'. 'show' now takes a parameter of -l, which will cause it to use 'less'.
+- 'list' can now take multiple application names.
+- Removed the default JAVA_HOME, so applications that don't use java, do not show a java home when using 'list'.
+- Added 'black' to PyCharm to format the code properly.
+
 * Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.6
 - Revert changes for python 3.12 regex strings.
 - Remove some python errors in certain cirumstances, and allow the Operating System's error to be seen.
-- list now will show a disabled servcie as disabled, not stopped.
+- 'list' now will show a disabled service as disabled, not stopped.
 
 * Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.5
 - Add changes for python 3.12 regex strings.
@@ -82,8 +88,8 @@ fi
 
 * Mon May 12 2025 Peter Hine <phine@nla.gov.au> 0.6.0
 - 'list' can now take a parameter, of a current app, like other commands.
-- Shutting down fapolicyd on 'deploy' only, and starting back up again, including if build fails.
-- jvmctl 'show' uses 'less' and not splat to the screen.
+- Shutting down fapolicyd on 'deploy' only, and starting it back up again, including if build fails.
+- jvmctl 'show' uses 'less' so as to not splat the config to the console.
 - Builds take place in /var/tmp/jvmctl/ not some random directory. Better for fapolicyd, if it is used.
 - jvmctl using a spec file to build rather setup.py (files left in place for review).
   This avoids the problem discussed in jvmctl/README.

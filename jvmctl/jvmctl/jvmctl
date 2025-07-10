@@ -19,15 +19,15 @@ from io import StringIO
 from urllib.request import urlretrieve
 from glob import glob
 
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # 1. Configuration Parser
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
-SYSTEM_CONF = '/etc/jvmctl.conf'
-CONF_ROOT = '/etc/jvmctl/apps'
-if path.exists('/opt/jetty/conf'):
-    CONF_ROOT = '/opt/jetty/conf'
-LOG_DIR = '/misc/bss/jvmctl'
+SYSTEM_CONF = "/etc/jvmctl.conf"
+CONF_ROOT = "/etc/jvmctl/apps"
+if path.exists("/opt/jetty/conf"):
+    CONF_ROOT = "/opt/jetty/conf"
+LOG_DIR = "/misc/bss/jvmctl"
 
 DEFAULTS = """
 [jetty]
@@ -38,7 +38,7 @@ CONTAINER=jetty
 HEAP_SIZE=128m
 HEAP_DUMP_PATH=/var/tmp/${NODE}.hprof
 USER=webapp
-JAVA_HOME=/usr/lib/jvm/java-1.8.0
+#JAVA_HOME=/usr/lib/jvm/java-21
 JETTY_VERSION=9.2.5.v20141112
 GIT_BRANCH=HEAD
 NLA_ENVIRON=devel
@@ -70,14 +70,18 @@ control_tools_root = path.dirname(path.dirname(path.realpath(__file__)))
 commands = {}
 groups = collections.OrderedDict()
 
+
 def cli_command(group=None):
     if group not in groups:
         groups[group] = groups.get(group, [])
+
     def deco(func):
         commands[func.__name__] = func
         groups[group].append(func)
         return func
+
     return deco
+
 
 def parse_shell_arrays(data):
     """
@@ -88,8 +92,8 @@ def parse_shell_arrays(data):
     pos = 0
     for m in re.finditer(r"(?m)^(?:\s*|^[^=]*=\s*)\(([^)]*)\)\s*$", data):
         body = m.group(1)
-        body = body.replace('\n', '\n ')
-        out += data[:m.start(1)] + body
+        body = body.replace("\n", "\n ")
+        out += data[:m.start(1)] + body  # fmt: skip
         pos = m.end()
     out += data[pos:]
     return out
@@ -105,17 +109,21 @@ def manage_service(action, service_name=""):
         :return :int        Output of subprocess.run
     """
     try:
-        if service_name == 'fapolicyd.service':
-            # We want the assurity of seeing this restart at the end of the process.
+        if service_name == "fapolicyd.service":
+            # We want the assurity of seeing this re-start at the end of the process.
             print("Running /usr/bin/systemctl", action, service_name)
         if service_name:
-            return subprocess.run(["/usr/bin/systemctl", '--no-pager', '--full', action, service_name], check=True).returncode
+            return subprocess.run(
+                ["/usr/bin/systemctl", "--no-pager", "--full", action, service_name],
+                check=True,
+            ).returncode
         else:
             # daemon reload doesn't like --no-pager
             return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
     except subprocess.CalledProcessError:
         # Remove python error and allow systemctl's error to be seen
         return 1
+
 
 class RawConfig(RawConfigParser):
     def optionxform(self, option):
@@ -126,16 +134,15 @@ class RawConfig(RawConfigParser):
         """Override to remove spaces around equals"""
         for section in self._sections:
             fp.write("[%s]\n" % section)
-            for (key, value) in self._sections[section].items():
+            for key, value in self._sections[section].items():
                 if key != "__name__":
-                    fp.write("%s=%s\n" %
-                             (key, str(value).replace('\n', '\n\t')))
+                    fp.write("%s=%s\n" % (key, str(value).replace("\n", "\n\t")))
             fp.write("\n")
 
 
 class Config(SafeConfigParser):
     def __init__(self, configfile):
-        SafeConfigParser.__init__(self, strict=False)
+        SafeConfigParser.__init__(self, strict=False, allow_no_value=True)
         f = open(configfile)
         try:
             text = f.read()
@@ -143,7 +150,7 @@ class Config(SafeConfigParser):
             f.close()
         text = re.sub(r"(?m)^\s*#.*", "", text)
         text = parse_shell_arrays(text)
-        text = '[jvm]\n' + text
+        text = "[jvm]\n" + text
         text = re.sub(r"(?m)^\s*export\s+", "", text)
         self.read_file(StringIO(DEFAULTS))
         self.load_system_config()
@@ -160,36 +167,38 @@ class Config(SafeConfigParser):
         return option
 
     def migrate_rename(self, oldname, newname):
-        if self.has_option('jvm', oldname):
-            self.set('jvm', newname, self.get('jvm', oldname))
-            self.remove_option('jvm', oldname)
+        if self.has_option("jvm", oldname):
+            self.set("jvm", newname, self.get("jvm", oldname))
+            self.remove_option("jvm", oldname)
 
     def migrate_legacy(self):
         """Migrate legacy config fields to the new format"""
-        self.migrate_rename('JETTY_USER', 'USER')
+        self.migrate_rename("JETTY_USER", "USER")
 
     def systemd_environment(self):
         s = ""
-        for k, v in self.items('jvm'):
+        for k, v in self.items("jvm"):
             if '"' in v:
-                s += '"' + k + '=' + v.replace('"', '\\"') + '" '
+                s += '"' + k + "=" + v.replace('"', '\\"') + '" '
             else:
-                s += k + '=' + v + ' '
+                s += k + "=" + v + " "
         return s
 
 
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # 2. Container Types
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+
 
 class NoneContainer:
     def __init__(self, node):
         self.node = node
         self.properties = {}
-        self.jvm_opts = node.config.get('jvm', 'APP_OPTS').split(' ')
+        self.jvm_opts = node.config.get("jvm", "APP_OPTS").split(" ")
 
     def deploy(self):
         pass
+
 
 JETTY_XML = """<?xml version="1.0"?>
 <!-- Auto-generated by jvmctl. Edit {node.config_file} instead -->
@@ -255,17 +264,17 @@ JETTY_FORWARDED_XML = """<?xml version="1.0"?>
 </Configure>
 """
 
+
 class JettyContainer:
-    cachedir = '/var/cache/jvmctl/container/'
+    cachedir = "/var/cache/jvmctl/container/"
+
     def __init__(self, node):
         self.node = node
-        self.version = node.config.get('jvm', 'JETTY_VERSION')
+        self.version = node.config.get("jvm", "JETTY_VERSION")
         self.home = path.join(self.cachedir, "jetty-" + self.version)
-        self.properties = {
-            'jetty.base': self.node.basedir
-        }
-        self.jvm_opts = ['-jar', path.join(self.home, "start.jar")]
-        self.webapps_path = node.config.get('jvm', 'WEBAPPS_PATH')
+        self.properties = {"jetty.base": self.node.basedir}
+        self.jvm_opts = ["-jar", path.join(self.home, "start.jar")]
+        self.webapps_path = node.config.get("jvm", "WEBAPPS_PATH")
         if not self.webapps_path:
             self.webapps_path = self.node.apps_path
 
@@ -277,17 +286,25 @@ class JettyContainer:
         """Download the requested version of Jetty"""
         if path.exists(self.home):
             return
-        url = self.node.config.get('jetty','REPO') + self.version + "/jetty-distribution-" + self.version + ".tar.gz"
+        url = (
+            self.node.config.get("jetty", "REPO")
+            + self.version
+            + "/jetty-distribution-"
+            + self.version
+            + ".tar.gz"
+        )
         if not path.exists(self.cachedir):
             os.makedirs(self.cachedir, exist_ok=True)
-        f = tempfile.mktemp(prefix='jetty-' + self.version + '-', suffix='.tar.gz')
+        f = tempfile.mktemp(prefix="jetty-" + self.version + "-", suffix=".tar.gz")
         try:
             print("Downloading Jetty from " + url)
             urlretrieve(url, f)
             subprocess.check_call(["tar", "-x", "-C", self.cachedir, "-f", f])
         finally:
             os.remove(f)
-        os.rename(path.join(self.cachedir, 'jetty-distribution-' + self.version), self.home)
+        os.rename(
+            path.join(self.cachedir, "jetty-distribution-" + self.version), self.home
+        )
 
     def configure_jetty(self):
         """Generate jetty XML configuration"""
@@ -301,19 +318,25 @@ class JettyContainer:
 
     def configure_jetty8(self):
         node = self.node
-        liblink = path.join(node.basedir, 'lib')
+        liblink = path.join(node.basedir, "lib")
         if not path.exists(liblink):
-            os.symlink(path.join(self.home, 'lib'), liblink)
-        with open(path.join(node.basedir, "context.xml"), 'w') as f:
+            os.symlink(path.join(self.home, "lib"), liblink)
+        with open(path.join(node.basedir, "context.xml"), "w") as f:
             contexts = []
             for war in self.discover_contexts():
-                contexts.append(JETTY_CONTEXT_XML.format(context_path=self.context_path_for_war(war), war=war))
-            f.write(JETTY_XML.format(node=node, context_xml=''.join(contexts)))
-        with open(path.join(node.basedir, "start.ini"), 'w') as f:
-            f.write("# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n")
+                contexts.append(
+                    JETTY_CONTEXT_XML.format(
+                        context_path=self.context_path_for_war(war), war=war
+                    )
+                )
+            f.write(JETTY_XML.format(node=node, context_xml="".join(contexts)))
+        with open(path.join(node.basedir, "start.ini"), "w") as f:
+            f.write(
+                "# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n"
+            )
             f.write("OPTIONS=Server,jsp,jmx,resources,websocket,ext,plus,annotations")
             f.write("\n")
-            f.write('jetty.port=' + node.config.get('jvm', 'PORT') + '\n')
+            f.write("jetty.port=" + node.config.get("jvm", "PORT") + "\n")
             f.write("\n")
             f.write(self.home + "/etc/jetty.xml\n")
             f.write(self.home + "/etc/jetty-annotations.xml\n")
@@ -321,20 +344,26 @@ class JettyContainer:
 
     def configure_jetty9(self):
         node = self.node
-        with open(path.join(node.basedir, "context.xml"), 'w') as f:
+        with open(path.join(node.basedir, "context.xml"), "w") as f:
             contexts = []
             for war in self.discover_contexts():
-                contexts.append(JETTY_CONTEXT_XML.format(context_path=self.context_path_for_war(war), war=war))
-            f.write(JETTY_XML.format(node=node, context_xml=''.join(contexts)))
-        with open(path.join(node.basedir, "http.xml"), 'w') as f:
+                contexts.append(
+                    JETTY_CONTEXT_XML.format(
+                        context_path=self.context_path_for_war(war), war=war
+                    )
+                )
+            f.write(JETTY_XML.format(node=node, context_xml="".join(contexts)))
+        with open(path.join(node.basedir, "http.xml"), "w") as f:
             f.write(JETTY_HTTP_XML.format(node=node))
-        with open(path.join(node.basedir, "forwarded.xml"), 'w') as f:
+        with open(path.join(node.basedir, "forwarded.xml"), "w") as f:
             f.write(JETTY_FORWARDED_XML.format(node=node))
-        with open(path.join(node.basedir, "start.ini"), 'w') as f:
-            f.write("# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n")
+        with open(path.join(node.basedir, "start.ini"), "w") as f:
+            f.write(
+                "# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n"
+            )
             f.write("--module=server\n--module=webapp\n--module=jsp\n")
             f.write("\n")
-            f.write('jetty.port=' + node.config.get('jvm', 'PORT') + '\n')
+            f.write("jetty.port=" + node.config.get("jvm", "PORT") + "\n")
             f.write("\n")
             f.write(node.basedir + "/context.xml\n")
             f.write(node.basedir + "/http.xml\n")
@@ -345,28 +374,30 @@ class JettyContainer:
             return
         for fn in os.listdir(self.webapps_path):
             f = path.join(self.webapps_path, fn)
-            if fn.startswith('.'):
+            if fn.startswith("."):
                 continue
-            elif path.isdir(f) or fn.endswith('.war'):
+            elif path.isdir(f) or fn.endswith(".war"):
                 yield f
 
     def context_path_for_war(self, war):
-        prefix = self.node.config.get('jvm', 'ROOT_URL_PREFIX')
+        prefix = self.node.config.get("jvm", "ROOT_URL_PREFIX")
         basename = path.basename(war)
-        if basename == 'ROOT' or basename == 'ROOT.war':
+        if basename == "ROOT" or basename == "ROOT.war":
             return prefix
-        if basename.endswith('.war'):
+        if basename.endswith(".war"):
             return path.join(prefix, basename[:-4])
         return path.join(prefix, basename)
 
+
 CONTAINER_TYPES = {
-    'jetty': JettyContainer,
-    'none': NoneContainer,
+    "jetty": JettyContainer,
+    "none": NoneContainer,
 }
 
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # 3. Source Control
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+
 
 class Repo:
     def __init__(self, url, node):
@@ -383,75 +414,87 @@ class Repo:
            /whatsit/trunk@1234 => whatsit
            /whatsit
         """
-        module = re.sub(r'/trunk/*', '', self.url)
-        module = re.sub(r'/tags/[^/][^/]*/*', '', module)
-        module = re.sub(r'/*$', '', module)
-        module = re.sub(r'.*/', '', module)
-        module = re.sub(r'@[^@/]*$', '', module)
-        if module == 'target' or not module:
+        module = re.sub(r"/trunk/*", "", self.url)
+        module = re.sub(r"/tags/[^/][^/]*/*", "", module)
+        module = re.sub(r"/*$", "", module)
+        module = re.sub(r".*/", "", module)
+        module = re.sub(r"@[^@/]*$", "", module)
+        if module == "target" or not module:
             module = self.name
         return module
 
+
 class GitRepo(Repo):
     def checkout(self, dest, target):
-        branch = self.node.config.get('jvm', 'GIT_BRANCH')
+        branch = self.node.config.get("jvm", "GIT_BRANCH")
         url = self.url
         cachekey = re.sub(r"[@:/]", "_", url)
-        gitdir = path.join(os.environ['HOME'], 'gitcache', cachekey)
+        gitdir = path.join(os.environ["HOME"], "gitcache", cachekey)
         if not os.path.exists(gitdir):
-            subprocess.check_call(['git', 'clone', '--bare', url, gitdir])
+            subprocess.check_call(["git", "clone", "--bare", url, gitdir])
         env = dict(os.environ)
-        env['GIT_DIR'] = gitdir
-        subprocess.check_call(['git', '--bare', 'fetch', '-f', url, branch], env=env)
-        subprocess.check_call(['git', 'branch', '-f', 'todeploy', 'FETCH_HEAD'], env=env)
-        subprocess.check_call(['git', 'clone', '--branch', 'todeploy', gitdir, dest])
+        env["GIT_DIR"] = gitdir
+        subprocess.check_call(["git", "--bare", "fetch", "-f", url, branch], env=env)
+        subprocess.check_call(
+            ["git", "branch", "-f", "todeploy", "FETCH_HEAD"], env=env
+        )
+        subprocess.check_call(["git", "clone", "--branch", "todeploy", gitdir, dest])
 
-        with open(path.join(target, 'git-revision'), 'a') as f:
-            f.write(branch + '\n')
+        with open(path.join(target, "git-revision"), "a") as f:
+            f.write(branch + "\n")
             f.flush()
             os.chdir(dest)
-            subprocess.call(['git', 'log', '-n1'], stdout=f)
+            subprocess.call(["git", "log", "-n1"], stdout=f)
+
 
 class SvnRepo(Repo):
     def checkout(self, dest, target):
-        subprocess.call(['id'])
-        subprocess.call(['svn', 'co', self.url, dest])
-        with open(path.join(target, 'svn-revision'), 'a') as f:
+        subprocess.call(["id"])
+        subprocess.call(["svn", "co", self.url, dest])
+        with open(path.join(target, "svn-revision"), "a") as f:
             os.chdir(dest)
-            subprocess.call(['svn', 'info'], stdout=f)
+            subprocess.call(["svn", "info"], stdout=f)
+
 
 def open_repo(url, node):
-    if url.startswith('git') or url.startswith('https://github.com'):
+    if url.startswith("git") or url.startswith("https://github.com"):
         return GitRepo(url, node)
     else:
         return SvnRepo(url, node)
 
-#----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
 # 4. Node Model
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+
 
 class Node:
     def __init__(self, name):
         if not name:
-            raise ValueError('node name cannot be empty')
+            raise ValueError("node name cannot be empty")
         if os.getuid() == 0:
             self.logger = logging.getLogger(name)
             try:
-                log_dir = self.config.get('jvm', 'LOG_DIR')
+                log_dir = self.config.get("jvm", "LOG_DIR")
             except AttributeError:
                 log_dir = LOG_DIR
             try:
-                logging.basicConfig(filename=log_dir+'/'+name+'.log', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S', format='%(asctime)s,%(message)s')
+                logging.basicConfig(
+                    filename=log_dir + "/" + name + ".log",
+                    level=logging.INFO,
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                    format="%(asctime)s,%(message)s",
+                )
             except FileNotFoundError:
                 self.logger = None
         self.name = name
-        self.config_file = path.join(CONF_ROOT, self.name) + '.conf'
-        self.svc = 'jvm:' + name
-        self.apps_path = path.join('/apps', name)
-        self.log_file = path.join('/logs', name, 'jetty.log')
+        self.config_file = path.join(CONF_ROOT, self.name) + ".conf"
+        self.svc = "jvm:" + name
+        self.apps_path = path.join("/apps", name)
+        self.log_file = path.join("/logs", name, "jetty.log")
         self._config = None
         self._container = None
-        self.basedir = '/var/cache/jvmctl/base/' + name
+        self.basedir = "/var/cache/jvmctl/base/" + name
 
     def __lt__(self, other):
         return self.name < other.name
@@ -459,10 +502,10 @@ class Node:
     @property
     def container(self):
         if self._container is None:
-            type_name = self.config.get('jvm', 'CONTAINER')
+            type_name = self.config.get("jvm", "CONTAINER")
             ctype = CONTAINER_TYPES.get(type_name)
             if ctype is None:
-                sys.stderr.write('Unknown CONTAINER type: ' + type_name + '\n')
+                sys.stderr.write("Unknown CONTAINER type: " + type_name + "\n")
                 sys.exit(1)
             self._container = ctype(self)
         return self._container
@@ -475,22 +518,38 @@ class Node:
 
     def ensure_valid(self):
         if not path.isfile(self.config_file):
-            die(self.config_file + ': not found.\nTo create it use: jvmctl ' + self.name + ' new')
-        if subprocess.call(['/bin/bash', '-n', self.config_file]) != 0:
-            die(self.config_file + ': syntax error')
+            die(
+                self.config_file
+                + ": not found.\nTo create it use: jvmctl "
+                + self.name
+                + " new"
+            )
+        if subprocess.call(["/bin/bash", "-n", self.config_file]) != 0:
+            die(self.config_file + ": syntax error")
 
     def spawnctl(self, command):
-        if command in ['start', 'stop', 'restart'] and os.getuid() == 0 and self.logger:
-            self.logger.info('%s,%s,%s,%s,%s' % (socket.gethostname(),
-                command,
-                self.version() or "-",
-                self.user or "-",
-                self.java_home or "-"))
-        if os.path.exists('/usr/bin/systemctl'):
+        if (
+            command in ["start", "stop", "restart", "enable", "disable"]
+            and os.getuid() == 0
+            and self.logger
+        ):
+            self.logger.info(
+                "%s,%s,%s,%s,%s"
+                % (
+                    socket.gethostname(),
+                    command,
+                    self.version() or "-",
+                    self.user or "-",
+                    self.java_home or "-",
+                )
+            )
+        if os.path.exists("/usr/bin/systemctl"):
             return manage_service(command, self.svc)
         else:
             try:
-                return subprocess.call([control_tools_root + '/bin/spawnctl', command, self.svc])
+                return subprocess.call(
+                    [control_tools_root + "/bin/spawnctl", command, self.svc]
+                )
             except subprocess.CalledProcessError:
                 # Remove python error and allow systemctl's error to be seen
                 return 1
@@ -512,64 +571,81 @@ class Node:
         try:
             with open(path.join(self.apps_path, "git-revision")) as f:
                 for line in f:
-                    match = re.match(r'^(?:refs/)?tags/(.*)', line)
-                    if match: return match.group(1)
-                    match = re.match(r'^commit (\w{7}).*', line)
-                    if match: return match.group(1)
+                    match = re.match(r"^(?:refs/)?tags/(.*)", line)
+                    if match:
+                        return match.group(1)
+                    match = re.match(r"^commit (\w{7}).*", line)
+                    if match:
+                        return match.group(1)
         except IOError:
             pass
         try:
             with open(path.join(self.apps_path, "svn-revision")) as f:
                 for line in f:
-                    match = re.match(r'^URL: .*/tags/(?:[a-z_-]+/)(?:[a-z]+-)([^/]*)$', line)
-                    if match: return match.group(1).strip()
-                    match = re.match(r'^Revision: (.*)', line)
-                    if match: return 'r' + match.group(1)
+                    match = re.match(
+                        r"^URL: .*/tags/(?:[a-z_-]+/)(?:[a-z]+-)([^/]*)$", line
+                    )
+                    if match:
+                        return match.group(1).strip()
+                    match = re.match(r"^Revision: (.*)", line)
+                    if match:
+                        return "r" + match.group(1)
         except IOError:
             pass
 
     def pid(self):
-        process = subprocess.Popen(['/usr/bin/systemctl', 'show', self.svc, '--property=MainPID'], stdout=subprocess.PIPE)
+        process = subprocess.Popen(
+            ["/usr/bin/systemctl", "show", self.svc, "--property=MainPID"],
+            stdout=subprocess.PIPE,
+        )
         out = process.communicate()[0].decode("utf-8")
         retcode = process.poll()
         if retcode:
             return None
-        return int(out.split('=')[1].strip())
+        return int(out.split("=")[1].strip())
 
     @property
     def repos(self):
-        return [open_repo(url, self) for url in self.config.get('jvm', 'REPO').split()]
+        return [open_repo(url, self) for url in self.config.get("jvm", "REPO").split()]
 
     @property
     def java_home(self):
-        return self.config.get('jvm', 'JAVA_HOME')
+        result = ""
+        if self.config.has_option("jvm", "JAVA_HOME"):
+            result = self.config.get("jvm", "JAVA_HOME")
+        return "jvm" in result and result or ""
 
     @property
     def user(self):
-        return self.config.get('jvm', 'USER') or self.config.get('jvm', 'JETTY_USER')
+        return self.config.get("jvm", "USER") or self.config.get("jvm", "JETTY_USER")
 
-#----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
 # 5. Command-line Interface
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
-@cli_command(group='Process management')
+
+@cli_command(group="Process management")
 def start(node):
     """update jetty configuration"""
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
-    node.spawnctl('enable')
-    sys.exit(node.spawnctl('start'))
+    node.spawnctl("enable")
+    sys.exit(node.spawnctl("start"))
+
 
 @cli_command(group="Process management")
 def stop(node):
     """stop the jvm"""
-    sys.exit(node.spawnctl('stop'))
+    sys.exit(node.spawnctl("stop"))
+
 
 @cli_command(group="Process management")
 def disable(node):
     """stop the jvm and prevent it from running on startup"""
-    sys.exit(node.spawnctl('disable'))
+    sys.exit(node.spawnctl("disable"))
+
 
 @cli_command(group="Process management")
 def enable(node):
@@ -577,7 +653,8 @@ def enable(node):
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
-    sys.exit(node.spawnctl('enable'))
+    sys.exit(node.spawnctl("enable"))
+
 
 @cli_command(group="Process management")
 def restart(node):
@@ -588,29 +665,33 @@ def restart(node):
     node.ensure_valid()
     reconfigure(node)
     node.autoregister()
-    node.spawnctl('enable')
-    sys.exit(node.spawnctl('restart'))
+    node.spawnctl("enable")
+    sys.exit(node.spawnctl("restart"))
+
 
 @cli_command(group="Process management")
 def status(node):
     """check whether the jvm is running"""
     port = node.port()
     if port is not None:
-        print('URL: http://' + socket.gethostname() + ':' + port)
-    print('Webapp path: ' + node.apps_path)
-    print('Version: ' + (node.version() or 'unknown'))
-    print('')
-    manage_service('status', node.svc + ' '.join(sys.argv[3:]))
+        print("URL: http://" + socket.gethostname() + ":" + port)
+    print("Webapp path: " + node.apps_path)
+    print("Version: " + (node.version() or "unknown"))
+    print("")
+    manage_service("status", node.svc + " ".join(sys.argv[3:]))
+
 
 @cli_command(group="Configuration")
 def delete(node):
     """delete the jvm's binaries and configuration"""
-    node.spawnctl('stop')
-    node.spawnctl('disable')
-    if path.exists('/usr/sbin/svccfg'):
-        subprocess.call(['/usr/sbin/svccfg', '-s', 'svc:/site/jetty', 'delete', '-f', node.name])
-    elif path.exists(path.join('/etc/spawn', node.svc)):
-        shutil.rmtree(path.join('/etc/spawn', node.svc))
+    node.spawnctl("stop")
+    node.spawnctl("disable")
+    if path.exists("/usr/sbin/svccfg"):
+        subprocess.call(
+            ["/usr/sbin/svccfg", "-s", "svc:/site/jetty", "delete", "-f", node.name]
+        )
+    elif path.exists(path.join("/etc/spawn", node.svc)):
+        shutil.rmtree(path.join("/etc/spawn", node.svc))
     if path.exists(node.apps_path):
         print("Removing", node.apps_path)
         shutil.rmtree(node.apps_path)
@@ -618,17 +699,19 @@ def delete(node):
         print("Removing", node.config_file)
         os.unlink(node.config_file)
 
+
 @cli_command(group="Debugging")
 def log(node):
     """browse the jvm's log file (use -f to follow tail)"""
-    logfile = '/logs/%s/stdio.log' % (node.name,)
+    logfile = "/logs/%s/stdio.log" % (node.name,)
     if os.path.exists(logfile):
-        os.execvp('less', ['less', '-R -n +F', logfile])
+        os.execvp("less", ["less", "-R -n +F", logfile])
     if os.getuid() != 0:
         print("Hint: try with sudo")
-    if 'SYSTEMD_PAGER' not in os.environ:
-        os.environ['SYSTEMD_PAGER'] = "LESS=FRXM less"
-    os.execvp('journalctl', ['journalctl', '-u', node.svc] + sys.argv[3:])
+    if "SYSTEMD_PAGER" not in os.environ:
+        os.environ["SYSTEMD_PAGER"] = "LESS=FRXM less"
+    os.execvp("journalctl", ["journalctl", "-u", node.svc] + sys.argv[3:])
+
 
 def find_new_port():
     new_port = 8081
@@ -640,34 +723,43 @@ def find_new_port():
                 new_port = port
     return new_port + 10
 
+
 @cli_command(group="Configuration")
 def new(node):
     """configure a new jvm"""
     if path.exists(node.config_file):
-        die(node.config_file + ': already exists')
+        die(node.config_file + ": already exists")
     if path.exists(node.apps_path):
-        die(node.apps_path + ': already exists')
+        die(node.apps_path + ": already exists")
     port = find_new_port()
-    f = open(node.config_file, 'w')
+    f = open(node.config_file, "w")
     try:
-        print('PORT=' + str(port), file=f)
-        print('', file=f)
-        print('#REPO=svn://...', file=f)
-        print('#JAVA_OPTS=-Dfoo=bar -Dtop.speed=fast', file=f)
-        print('#HEAP_SIZE=128m', file=f)
+        print("PORT=" + str(port), file=f)
+        print("", file=f)
+        print("#REPO=svn://...", file=f)
+        print("#JAVA_OPTS=-Dfoo=bar -Dtop.speed=fast", file=f)
+        print("#HEAP_SIZE=128m", file=f)
     finally:
         f.close()
 
+
 @cli_command(group="Configuration")
-def show(node):
-    """show the jvm's configuration"""
+def show(node, *args):
+    """show the jvm's configuration. Use -l to use less instead of showing the config on the console."""
     node.ensure_valid()
     try:
-        subprocess.run(['/usr/bin/less', node.config_file], check=True)
+        if "-l" in args:
+            subprocess.run(["/usr/bin/less", node.config_file], check=True)
+        else:
+            subprocess.run(["/usr/bin/cat", node.config_file], check=True)
     except FileNotFoundError:
-        print("\033[31mError\033[0m: '/usr/bin/less' command not found. Please make sure it is installed.")
+        print(
+            "\033[31mError\033[0m: '/usr/bin/less' command not found. Please make sure it is installed."
+        )
     except subprocess.CalledProcessError:
-        print("\033[31mError\033[0m: Could not open or display the file using /usr/bin/less.")
+        print(
+            "\033[31mError\033[0m: Could not open or display the file using /usr/bin/less."
+        )
 
 
 @cli_command(group="Configuration")
@@ -676,207 +768,261 @@ def dump(node):
     post_config(node)
     node.config.write(sys.stdout)
 
+
 @cli_command(group="Configuration")
 def config(node):
     """edit the jvm's configuration"""
     node.ensure_valid()
     if os.getuid() != 0:
-        die('config requires sudo')
-    if 'EDITOR' not in os.environ:
-        os.environ['EDITOR'] = 'vi'
-    result = subprocess.call(['sudoedit', node.config_file])
+        die("config requires sudo")
+    if "EDITOR" not in os.environ:
+        os.environ["EDITOR"] = "vi"
+    result = subprocess.call(["sudoedit", node.config_file])
     reconfigure(node)
     os.chdir(CONF_ROOT)
     try:
-        subprocess.check_call(['git', 'rev-parse', '--is-inside-work-tree'], stdout=open(os.devnull, 'wb'))
+        subprocess.check_call(
+            ["git", "rev-parse", "--is-inside-work-tree"], stdout=open(os.devnull, "wb")
+        )
     except:
-        subprocess.check_call(['git', 'init'])
-    subprocess.check_call(['git', 'add', node.config_file])
-    if subprocess.call(['git', 'diff-index', '--quiet', 'HEAD']):
-        os.environ['GIT_COMMITTER_NAME'] = 'jvmctl'
-        os.environ['GIT_COMMITTER_EMAIL'] = 'root@'+os.uname()[1]
-        subprocess.check_call(['git', 'commit', '--author="{0} <{0}@nla.gov.au>"'.format(os.getlogin()), '-m "Config change for {}"'.format(node.name)])
+        subprocess.check_call(["git", "init"])
+    subprocess.check_call(["git", "add", node.config_file])
+    if subprocess.call(["git", "diff-index", "--quiet", "HEAD"]):
+        os.environ["GIT_COMMITTER_NAME"] = "jvmctl"
+        os.environ["GIT_COMMITTER_EMAIL"] = "root@" + os.uname()[1]
+        subprocess.check_call(
+            [
+                "git",
+                "commit",
+                '--author="{0} <{0}@nla.gov.au>"'.format(os.getlogin()),
+                '-m "Config change for {}"'.format(node.name),
+            ]
+        )
     return result
+
 
 @cli_command(group="Configuration")
 def changed(node):
     """show the last change to the config"""
     os.chdir(CONF_ROOT)
     hash = fetch_hash(node)
-    subprocess.check_call(['git', 'show', hash])
+    subprocess.check_call(["git", "show", hash])
+
 
 @cli_command(group="Configuration")
 def revert(node):
     """revert the last change to the config"""
     os.chdir(CONF_ROOT)
     if os.getuid() != 0:
-        die('revert requires sudo')
+        die("revert requires sudo")
     hash = fetch_hash(node)
-    subprocess.check_call(['git', 'revert', hash, '--no-edit'])
+    subprocess.check_call(["git", "revert", hash, "--no-edit"])
+
 
 @cli_command(group="Process management")
 def pid(node):
     """print the process ID of the jvm"""
     pid = node.pid()
     if pid is None:
-        die('not running')
+        die("not running")
     print(pid)
+
 
 @cli_command(group="Debugging")
 def lsof(node):
     """list the jvm's open files and sockets"""
-    return subprocess.call(['lsof', '-p', str(node.pid())])
+    return subprocess.call(["lsof", "-p", str(node.pid())])
+
 
 @cli_command(group="Debugging")
 def stack(node):
     """print a stack trace for all jvm threads"""
     pid = node.pid()
-    stat = os.stat('/proc/%d' % pid)
-    jstack = path.join(node.java_home, 'bin/jstack')
-    return subprocess.call([jstack, str(pid)],
-            preexec_fn=switchuid(stat.st_uid, stat.st_gid))
+    stat = os.stat("/proc/%d" % pid)
+    jstack = path.join(node.java_home, "bin/jstack")
+    return subprocess.call(
+        [jstack, str(pid)], preexec_fn=switchuid(stat.st_uid, stat.st_gid)
+    )
+
 
 @cli_command(group="Debugging")
 def gcutil(node):
     """print garbage collection statistics"""
     pid = node.pid()
-    stat = os.stat('/proc/%d' % pid)
-    jstat = path.join(node.java_home, 'bin/jstat')
-    return subprocess.call([jstat, '-gcutil', str(pid)] + sys.argv[3:],
-            preexec_fn=switchuid(stat.st_uid, stat.st_gid))
+    stat = os.stat("/proc/%d" % pid)
+    jstat = path.join(node.java_home, "bin/jstat")
+    return subprocess.call(
+        [jstat, "-gcutil", str(pid)] + sys.argv[3:],
+        preexec_fn=switchuid(stat.st_uid, stat.st_gid),
+    )
+
 
 def build(node, workarea, args):
     """Build the application. We are running as the builder user."""
-    target = path.join(workarea, 'target')
+    target = path.join(workarea, "target")
     os.makedirs(target, exist_ok=True)
-    os.environ['PATH'] = node.config.get('jvm', 'JAVA_HOME') + '/bin:/usr/local/bin:/bin:/usr/bin'
+    os.environ["PATH"] = (
+        node.config.get("jvm", "JAVA_HOME") + "/bin:/usr/local/bin:/bin:/usr/bin"
+    )
 
     for repo in node.repos:
         moduledir = path.join(workarea, repo.module)
         repo.checkout(moduledir, target)
         os.chdir(moduledir)
 
-        nla_environ = node.config.get('jvm', 'NLA_ENVIRON')
-        nla_deploy = path.join(moduledir, 'nla-deploy.sh')
-        pom = path.join(moduledir, 'pom.xml')
+        nla_environ = node.config.get("jvm", "NLA_ENVIRON")
+        nla_deploy = path.join(moduledir, "nla-deploy.sh")
+        pom = path.join(moduledir, "pom.xml")
 
         env = dict(os.environ)
-        for k, v in node.config.items('jvm'):
+        for k, v in node.config.items("jvm"):
             env[k] = v
 
-        if '-d' in args:
-            print('\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.')
-            subprocess.check_call(os.environ.get('SHELL', '/bin/sh'), env=env)
+        if "-d" in args:
+            print(
+                '\nDropping into debug shell. Type "exit" to continue deploy or "exit 1" to abort.'
+            )
+            subprocess.check_call(os.environ.get("SHELL", "/bin/sh"), env=env)
 
         if path.exists(nla_deploy):
-            subprocess.call(['/bin/bash', '-e', 'nla-deploy.sh', target, nla_environ, node.apps_path], env=env)
+            subprocess.call(
+                [
+                    "/bin/bash",
+                    "-e",
+                    "nla-deploy.sh",
+                    target,
+                    nla_environ,
+                    node.apps_path,
+                ],
+                env=env,
+            )
         elif path.exists(pom):
             if nla_environ:
-                subprocess.call(['mvn', 'package', '-P', nla_environ], env=env)
+                subprocess.call(["mvn", "package", "-P", nla_environ], env=env)
             else:
-                subprocess.call(['mvn', 'package'], env=env)
-            wars = glob(path.join(moduledir, 'target/*.war'))
+                subprocess.call(["mvn", "package"], env=env)
+            wars = glob(path.join(moduledir, "target/*.war"))
             for war in wars:
                 if len(wars) == 1:
-                    basename = 'ROOT'
+                    basename = "ROOT"
                 else:
-                    basename = target,re.sub(r'.war$', '', path.basename(war))
+                    basename = target, re.sub(r".war$", "", path.basename(war))
                 unpack = path.join(target, basename)
                 os.makedirs(unpack, exist_ok=True)
-                subprocess.call(['unzip', '-d', unpack, war])
+                subprocess.call(["unzip", "-d", unpack, war])
             if not wars:
-                jars = glob(path.join(moduledir, 'target/*.jar'))
+                jars = glob(path.join(moduledir, "target/*.jar"))
                 for jar in jars:
-                    if not path.basename(jar).startswith('original-'):
+                    if not path.basename(jar).startswith("original-"):
                         print("Copying", jar, "to target")
                         shutil.copy(jar, path.join(target, path.basename(jar)))
         else:
-            print('nla.deploy.sh and pom.xml not found')
-            print('At least one of them must exist. Bailing.')
+            print("nla.deploy.sh and pom.xml not found")
+            print("At least one of them must exist. Bailing.")
             sys.exit(1)
+
 
 @cli_command(group="Configuration")
 def deploy(node, *args):
     """(re)build and redeploy the application"""
     node.ensure_valid()
-    if not os.access('/apps', os.W_OK):
+    if not os.access("/apps", os.W_OK):
         die("Need permission to write to /apps (maybe try sudo?)")
-    node.config # ensure config has been read before dropping privileges
-    timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
-    workarea = '/var/tmp/jvmctl/build-%s-%s' % (node.name, timestamp)
-    target = path.join(workarea, 'target')
+    node.config  # ensure config has been read before dropping privileges
+    timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
+    workarea = "/var/tmp/jvmctl/build-%s-%s" % (node.name, timestamp)
+    target = path.join(workarea, "target")
     dest = node.apps_path
-    pw = pwd.getpwnam('builder')
-    os.chdir('/') # workaround selinux permission problem when we switch uid
+    pw = pwd.getpwnam("builder")
+    os.chdir("/")  # workaround selinux permission problem when we switch uid
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
-        manage_service('stop', 'fapolicyd.service')
+        manage_service("stop", "fapolicyd.service")
         switchuid(pw.pw_uid, pw.pw_gid)()
-        if '-s' in args:
-            os.environ['MAVEN_OPTS'] = '-Dmaven.test.skip=true'
-        os.environ['HOME'] = pw.pw_dir
-        os.environ['WEBAPPS_PATH'] = dest
-        os.environ['NODE'] = node.name
-        os.environ['WORKAREA'] = workarea
+        if "-s" in args:
+            os.environ["MAVEN_OPTS"] = "-Dmaven.test.skip=true"
+        os.environ["HOME"] = pw.pw_dir
+        os.environ["WEBAPPS_PATH"] = dest
+        os.environ["NODE"] = node.name
+        os.environ["WORKAREA"] = workarea
         try:
-            build(node, workarea, args)
+            # Only build if java_home exists
+            if node.java_home:
+                build(node, workarea, args)
+            # else wise we will stop and start
         finally:
             sys.exit(0)
     else:
         pid, result = os.wait()
-    manage_service('start', 'fapolicyd.service')
-    if result != 0:
-        die('Build failed. You may inspect ' + workarea)
-    if not [f for f in os.listdir(target) if not f.endswith('-revision')]:
-        die('Oh dear! ' + target + ' is empty.  I guess the build failed.  Bailing out.')
-    newdest = dest + '.new.' + timestamp
-    olddest = dest + '.old.' + timestamp
-    print()
-    print('Copying %s to %s...' % (target, newdest))
-    shutil.copytree(target, newdest, symlinks=True)
+    manage_service("start", "fapolicyd.service")
+    if node.java_home:
+        if result != 0:
+            die("Build failed. You may inspect " + workarea)
+        if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
+            die(
+                "Oh dear! "
+                + target
+                + " is empty.  I guess the build failed.  Bailing out."
+            )
+        newdest = dest + ".new." + timestamp
+        olddest = dest + ".old." + timestamp
+        print()
+        print("Copying %s to %s..." % (target, newdest))
+        shutil.copytree(target, newdest, symlinks=True)
 
-    print('Stopping %s...' % node.name)
-    node.spawnctl('stop')
-    print('Swapping in the the version...')
-    if path.exists(dest):
-        os.rename(dest, olddest)
-    os.rename(newdest, dest)
+        print("Stopping %s..." % node.name)
+        node.spawnctl("stop")
+        print("Swapping in the the version...")
+        if path.exists(dest):
+            os.rename(dest, olddest)
+        os.rename(newdest, dest)
 
-    print('Configuring container...')
-    node.container.deploy()
-    node.autoregister()
+        print("Configuring container...")
+        node.container.deploy()
+        node.autoregister()
 
-    print('Starting %s...' % node.name)
-    if node.spawnctl('start') == 0:
-        print("Success! Cleaning up the working area...")
-        shutil.rmtree(workarea)
-        if os.path.exists(olddest):
-            print("Deleting the old version, mwahahaha!")
-            shutil.rmtree(olddest)
-        node.spawnctl('enable')
+        print("Starting %s..." % node.name)
+        if node.spawnctl("start") == 0:
+            print("Success! Cleaning up the working area...")
+            shutil.rmtree(workarea)
+            if os.path.exists(olddest):
+                print("Deleting the old version, mwahahaha!")
+                shutil.rmtree(olddest)
+            node.spawnctl("enable")
+        else:
+            print("Uh.... something seems to have gone wrong starting up.")
+            print("I'm leaving the old version for you in %s" % olddest)
     else:
-        print("Uh.... something seems to have gone wrong starting up")
-        print("I'm leaving the old version for you in %s" % olddest)
+        print("Stopping %s..." % node.name)
+        node.spawnctl("stop")
+        print("Starting %s..." % node.name)
+        node.spawnctl("start")
+        node.spawnctl("enable")
     print("")
     status(node)
 
+
 def quote(s):
-    if ' ' in s:
+    if " " in s:
         return '"' + s + '"'
     else:
         return s
 
+
 def fmt_properties(properties):
-    return ' '.join(quote('-D' + k + '=' + v) for k,v in properties.items())
+    return " ".join(quote("-D" + k + "=" + v) for k, v in properties.items())
+
 
 def quote_list(list):
     return " ".join(quote(s) for s in list)
+
 
 @cli_command(group="Hidden")
 def reconfigure(node):
     node.container.deploy()
     systemd_register(node)
+
 
 @cli_command(group="Hidden")
 def oomkill(node, pid):
@@ -886,9 +1032,9 @@ def oomkill(node, pid):
 
 
 def send_oom_email(node, pid):
-    oom_emails = node.config.get('jvm', 'OOM_EMAIL').split()
-    mail_from = getpass.getuser() + '@' + socket.gethostname()
-    smtp = smtplib.SMTP('localhost')
+    oom_emails = node.config.get("jvm", "OOM_EMAIL").split()
+    mail_from = getpass.getuser() + "@" + socket.gethostname()
+    smtp = smtplib.SMTP("localhost")
     try:
         for mail_to in oom_emails:
             message = """\
@@ -901,30 +1047,32 @@ JVM {name} on {hostname} with pid {pid} ran out of memory and was restarted.
 Heap dump path: {heap_dump_path}
 
 --
-{script}\n""".format(mail_from=mail_from,
-                     mail_to=mail_to,
-                     name=node.name,
-                     pid=pid,
-                     hostname=socket.gethostname(),
-                     heap_dump_path=node.config.get('jvm', 'HEAP_DUMP_PATH'),
-                     script=path.realpath(__file__))
+{script}\n""".format(
+                mail_from=mail_from,
+                mail_to=mail_to,
+                name=node.name,
+                pid=pid,
+                hostname=socket.gethostname(),
+                heap_dump_path=node.config.get("jvm", "HEAP_DUMP_PATH"),
+                script=path.realpath(__file__),
+            )
             smtp.sendmail(mail_from, mail_to, message)
     finally:
         smtp.quit()
 
 
 def try_rename_heap_dump(node):
-    "Rename the temporary heap dump file. Replace any previous permanent dump file so we only keep the latest."
-    heap_dump_path = node.config.get('jvm', 'HEAP_DUMP_PATH')
-    if heap_dump_path and os.path.isfile(heap_dump_path + '.tmp'):
+    """Rename the temporary heap dump file. Replace any previous permanent dump file so we only keep the latest."""
+    heap_dump_path = node.config.get("jvm", "HEAP_DUMP_PATH")
+    if heap_dump_path and os.path.isfile(heap_dump_path + ".tmp"):
         try:
-            os.rename(heap_dump_path + '.tmp', heap_dump_path)
+            os.rename(heap_dump_path + ".tmp", heap_dump_path)
         except OSError:
-            pass # if there's a permissions problem or something just give up
+            pass  # if there's a permissions problem or something just give up
 
 
 def try_kill_jvm(node, pid):
-    print('jvmctl oomkill', node.name, pid)
+    print("jvmctl oomkill", node.name, pid)
     pid = int(pid)
     try:
         os.kill(pid, signal.SIGKILL)
@@ -936,49 +1084,63 @@ def set_unless_present(config, section, option, value):
     if not config.has_option(section, option):
         config.set(section, option, value)
 
+
 def post_config(node):
-    properties = {
-        'jvmctl.node': node.name
-    }
-    property_opts = fmt_properties(properties) + ' ' + fmt_properties(node.container.properties)
-    jvm_opts = ['-Xmx' + node.config.get('jvm', 'HEAP_SIZE'),
-                '-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill ' + node.name + ' %p',
-                '-Dlog4j2.formatMsgNoLookups=true']
+    properties = {"jvmctl.node": node.name}
+    property_opts = (
+        fmt_properties(properties) + " " + fmt_properties(node.container.properties)
+    )
+    jvm_opts = [
+        "-Xmx" + node.config.get("jvm", "HEAP_SIZE"),
+        "-XX:OnOutOfMemoryError=/usr/bin/jvmctl oomkill " + node.name + " %p",
+        "-Dlog4j2.formatMsgNoLookups=true",
+    ]
 
-    heap_dump_path = node.config.get('jvm', 'HEAP_DUMP_PATH')
+    heap_dump_path = node.config.get("jvm", "HEAP_DUMP_PATH")
     if heap_dump_path:
-        jvm_opts.append('-XX:+HeapDumpOnOutOfMemoryError')
+        jvm_opts.append("-XX:+HeapDumpOnOutOfMemoryError")
         if heap_dump_path.endswith("/") or os.path.isdir(heap_dump_path):
-            jvm_opts.append('-XX:HeapDumpPath=' + heap_dump_path)
+            jvm_opts.append("-XX:HeapDumpPath=" + heap_dump_path)
         else:
-            jvm_opts.append('-XX:HeapDumpPath=' + heap_dump_path + ".tmp")
+            jvm_opts.append("-XX:HeapDumpPath=" + heap_dump_path + ".tmp")
 
-    jvm_opts += shlex.split(node.config.get('jvm', 'GC_LOG_OPTS'))
-    jvm_opts += shlex.split(node.config.get('jvm', 'JAVA_OPTS'))
+    jvm_opts += shlex.split(node.config.get("jvm", "GC_LOG_OPTS"))
+    jvm_opts += shlex.split(node.config.get("jvm", "JAVA_OPTS"))
     jvm_opts += node.container.jvm_opts
 
-    exec_prefix = node.config.get('jvm', 'EXEC_PREFIX')
+    exec_prefix = node.config.get("jvm", "EXEC_PREFIX")
     if exec_prefix:
-        cmd = exec_prefix + ' '
+        cmd = exec_prefix + " "
     else:
-        cmd = ''
+        cmd = ""
 
-    cmd += node.java_home + "/bin/java " + property_opts + ' ' + quote_list(jvm_opts)
+    cmd += node.java_home + "/bin/java " + property_opts + " " + quote_list(jvm_opts)
 
-    socket = node.config.get('jvm', 'SOCKET')
-    env_file = path.join(node.basedir, 'environment')
+    socket = node.config.get("jvm", "SOCKET")
+    env_file = path.join(node.basedir, "environment")
 
-    set_unless_present(node.config, 'systemd.service.Service', 'WorkingDirectory', node.basedir)
-    set_unless_present(node.config, 'systemd.service.Service', 'EnvironmentFile', env_file)
-    set_unless_present(node.config, 'systemd.service.Service', 'User', node.config.get('jvm', 'USER'))
-    set_unless_present(node.config, 'systemd.service.Service', 'ExecStart', cmd.replace('%', '%%%%'))
+    set_unless_present(
+        node.config, "systemd.service.Service", "WorkingDirectory", node.basedir
+    )
+    set_unless_present(
+        node.config, "systemd.service.Service", "EnvironmentFile", env_file
+    )
+    set_unless_present(
+        node.config, "systemd.service.Service", "User", node.config.get("jvm", "USER")
+    )
+    set_unless_present(
+        node.config, "systemd.service.Service", "ExecStart", cmd.replace("%", "%%%%")
+    )
 
     if socket:
-            socket_unit = 'jvm:' + node.name + '.socket'
-            old_after = node.config.get('systemd.service.Unit', 'After')
-            node.config.set('systemd.service.Unit', 'After', old_after + ' ' + socket_unit)
-            set_unless_present(node.config, 'systemd.service.Unit', 'Requires', socket_unit)
-            set_unless_present(node.config, 'systemd.service.Service', 'StandardInput', 'socket')
+        socket_unit = "jvm:" + node.name + ".socket"
+        old_after = node.config.get("systemd.service.Unit", "After")
+        node.config.set("systemd.service.Unit", "After", old_after + " " + socket_unit)
+        set_unless_present(node.config, "systemd.service.Unit", "Requires", socket_unit)
+        set_unless_present(
+            node.config, "systemd.service.Service", "StandardInput", "socket"
+        )
+
 
 @cli_command(group="Hidden")
 def systemd_register(node):
@@ -987,31 +1149,35 @@ def systemd_register(node):
     if not path.exists(node.basedir):
         os.makedirs(node.basedir, exist_ok=True)
 
-    env_file = node.config.get('systemd.service.Service', 'EnvironmentFile')
+    env_file = node.config.get("systemd.service.Service", "EnvironmentFile")
 
-    with os.fdopen(os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as f:
+    with os.fdopen(
+        os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w"
+    ) as f:
         f.write("# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n")
-        f.write('NODE=' + node.name + '\n')
-        for k, v in node.config.items('jvm'):
-            v = v.replace('\n', ' ')
+        f.write("NODE=" + node.name + "\n")
+        for k, v in node.config.items("jvm"):
+            v = v.replace("\n", " ")
             f.write(k + "=" + v + "\n")
 
-    socket = node.config.get('jvm', 'SOCKET')
-    with open('/etc/systemd/system/' + node.svc + '.service', 'w') as f:
+    socket = node.config.get("jvm", "SOCKET")
+    with open("/etc/systemd/system/" + node.svc + ".service", "w") as f:
         f.write("# Auto-generated by jvmctl. Edit " + node.config_file + " instead\n")
         conf = RawConfig()
         for section in node.config.sections():
-            if not section.startswith('systemd.service.'): continue
-            out_section = section.replace('systemd.service.', '')
+            if not section.startswith("systemd.service."):
+                continue
+            out_section = section.replace("systemd.service.", "")
             conf.add_section(out_section)
             for k, v in node.config.items(section):
                 conf.set(out_section, k, v)
         conf.write(f)
 
-    socket_config = '/etc/systemd/system/' + node.svc + '.socket'
+    socket_config = "/etc/systemd/system/" + node.svc + ".socket"
     if socket:
-        with open(socket_config, 'w') as f:
-            f.write("""[Socket]
+        with open(socket_config, "w") as f:
+            f.write(
+                """[Socket]
 ListenStream={socket}
 SocketMode={socket_mode}
 SocketUser={socket_user}
@@ -1019,101 +1185,164 @@ SocketGroup={socket_group}
 
 [Install]
 WantedBy=sockets.target
-""".format(socket=socket,
-                socket_user=node.config.get('jvm', 'SOCKET_USER'),
-                socket_group=node.config.get('jvm', 'SOCKET_GROUP'),
-                socket_mode=node.config.get('jvm', 'SOCKET_MODE')))
+""".format(
+                    socket=socket,
+                    socket_user=node.config.get("jvm", "SOCKET_USER"),
+                    socket_group=node.config.get("jvm", "SOCKET_GROUP"),
+                    socket_mode=node.config.get("jvm", "SOCKET_MODE"),
+                )
+            )
 
     elif path.exists(socket_config):
         os.unlink(socket_config)
 
-    manage_service('daemon-reload')
+    manage_service("daemon-reload")
     if socket:
-        manage_service('enable', node.svc + '.socket')
+        manage_service("enable", node.svc + ".socket")
 
-@cli_command(group="Debugging")
-def run(node):
-    """run the application interactively"""
-    pass
+
+# @cli_command(group="Debugging")
+# def run(node):
+#     """run the application interactively"""
+#     pass
+
 
 def fetch_hash(node):
     node.ensure_valid()
     try:
-        hash = subprocess.check_output(['git', 'log', '-n 1', '--pretty=format:%H', node.config_file])
+        hash = subprocess.check_output(
+            ["git", "log", "-n 1", "--pretty=format:%H", node.config_file]
+        )
     except:
-        die('{} was not found in version control.  Try editing the config with \n jvmctl config {}'.format(node.config_file, node.name))
+        die(
+            "{} was not found in version control.  Try editing the config with \n jvmctl config {}".format(
+                node.config_file, node.name
+            )
+        )
     if not hash:
-        die('no changes found for ' + node.name)
+        die("no changes found for " + node.name)
     return hash
+
 
 def switchuid(uid, gid):
     def f():
         os.setgroups([])
         os.setgid(gid)
         os.setuid(uid)
+
     return f
+
 
 def iter_nodes():
     for filename in os.listdir(CONF_ROOT):
-        if filename.endswith('.conf'):
-            yield Node(filename.split('.', 2)[0])
+        if filename.endswith(".conf"):
+            yield Node(filename.split(".", 2)[0])
+
+
+def check_conf_exists(args, files):
+    """Check list of passed in application names and see if there is a corresponding .conf file"""
+    # res = ["test"]
+    # print("check_conf_exists", type(args), args)
+    res = []
+    for fname in args:
+        if f"{fname}.conf" in files:
+            res.append(Node(fname))
+            # print("check_conf_exists3", type(args), args, res)
+    return res
+
 
 @cli_command(group="Debugging")
-def list(app = None):
-    if app:
-        app.ensure_valid()
-        nodes = [app]
+def list(*apps):
+    # The indent in the document stanza is so it looks good when usage() is shown.
+    # fmt: off
+    """list applications
+              If no parameters added, then list all applications.
+              If application names are listed, then only list those applications, if they are valid.
+              EG:
+                jvmctl list pywb pandas Pandas odin
+                will only list pywb, pandas and odin. Pandas will be ignored as it is the wrong case."""
+    # fmt: on
+    # param: *args the list of apps
+    #         args[1] is a Node class of the first application on the command line.
+    #         the rest will be text node names.
+    if len(apps) == 1:
+        # As the first param is always a node, we have to check for that
+        apps[0].ensure_valid()
+        nodes = [apps[0]]
+    elif len(apps) == 0:
+        # If nothing passed in, we will list them all
+        nodes = sorted(iter_nodes(), key=lambda node: node.name)
     else:
-      nodes = sorted(iter_nodes(), key=lambda node: node.name)
-    print('%-30s  %7s  %5s  %-10s %-33s %s' % ('NODE', 'VERSION', 'PORT', 'USER', 'JAVA_HOME', 'STATUS'))
+        # go through all the list and add the first node back into the result
+        files = os.listdir(CONF_ROOT)
+        nodes = check_conf_exists(apps[1:], files)
+        nodes.insert(0, apps[0])
+    print(
+        "%-30s  %7s  %5s  %-10s %-33s %s"
+        % ("NODE", "VERSION", "PORT", "USER", "JAVA_HOME", "STATUS")
+    )
     for node in nodes:
         pid = node.pid()
-        if os.path.exists('/etc/systemd/system/multi-user.target.wants/' + node.svc + '.service'):
+        if os.path.exists(
+            "/etc/systemd/system/multi-user.target.wants/" + node.svc + ".service"
+        ):
             if pid:
-                status =  'running as ' + str(pid)
+                status = "running as " + str(pid)
             else:
-                status = 'stopped'
+                status = "stopped"
         else:
-            status = 'disabled'
+            status = "disabled"
 
-        print('%-30s  %7s  %5s  %-10s %-33s %s' % (node.name,
-            node.version() or "-",
-            node.port() or "-",
-            node.user or "-",
-            node.java_home or "-",
-            status))
+        print(
+            "%-30s  %7s  %5s  %-10s %-33s %s"
+            % (
+                node.name,
+                node.version() or "-",
+                node.port() or "-",
+                node.user or "-",
+                node.java_home or "-",
+                status,
+            )
+        )
+
 
 def die(msg):
-    print(sys.argv[0] + ': ' + msg, file=sys.stderr)
+    print(sys.argv[0] + ": " + msg, file=sys.stderr)
     sys.exit(1)
 
+
 def usage():
-    print('Usage: %s <app> <command>' % sys.argv[0])
-    print('Control and deploy JVM applications')
+    print("Usage: %s <app> <command>" % sys.argv[0])
+    print("Control and deploy JVM applications")
     for group, funcs in groups.items():
-        if group == 'Hidden': continue
+        if group == "Hidden":
+            continue
         print()
-        print('%s:' % group)
+        print("%s:" % group)
         for func in sorted(funcs, key=lambda f: f.__name__):
-            print('  %-10s- %s' % (func.__name__, func.__doc__))
+            print("  %-10s- %s" % (func.__name__, func.__doc__))
     sys.exit(1)
+
 
 def main():
     if len(sys.argv) == 2:
-        if sys.argv[1] == 'list':
+        if sys.argv[1] == "list":
             list()
     elif len(sys.argv) < 3:
         usage()
     else:
-        node = sys.argv[1]
-        cmd = sys.argv[2]
+        arg1 = sys.argv[1]
+        arg2 = sys.argv[2]
         args = sys.argv[3:]
-        if cmd in commands:
-            sys.exit(commands[cmd](Node(node), *args) or 0)
-        elif node in commands:
-            sys.exit(commands[node](Node(cmd), *args) or 0)
+        # arg1 and arg2 can be reversed. eg show pyweb or pyweb show
+        if arg1 in commands:
+            sys.exit(commands[arg1](Node(arg2), *args) or 0)
+        elif arg2 in commands:
+            sys.exit(commands[arg2](Node(arg1), *args) or 0)
         else:
-            print('Unknown command', file=sys.stderr)
+            print("Unknown command", file=sys.stderr)
             usage()
 
-if __name__ == '__main__': main()
+
+if __name__ == "__main__":
+    main()
