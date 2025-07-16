@@ -64,6 +64,7 @@ fi
 - 'list' can now take multiple application names.
 - Removed the default JAVA_HOME, so applications that don't use java, do not show a java home when using 'list'.
 - Added 'black' to PyCharm to format the code properly.
+- Added 'view', which uses 'less' by default.
 
 * Tue Jun 17 2025 Peter Hine <phine@nla.gov.au> 0.6.6
 - Revert changes for python 3.12 regex strings.

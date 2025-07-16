@@ -29,6 +29,17 @@ if path.exists("/opt/jetty/conf"):
     CONF_ROOT = "/opt/jetty/conf"
 LOG_DIR = "/misc/bss/jvmctl"
 
+C_Default = "\033[0m"
+C_Red = "\033[0;31m"
+C_Green = "\033[0;32m"
+C_Yellow = "\033[0;33m"
+C_aBlue = "\033[0;34m"
+C_Cyan = "\033[0;36m"
+C_BBlue = "\033[1;34m"
+C_DeepSkyBlue4 = "\033[38;5;23m"
+C_Purple = "\033[38;5;129m"
+C_DarkGreen = "\033[38;5;22m"
+
 DEFAULTS = """
 [jetty]
 REPO=https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-distribution/
@@ -610,10 +621,13 @@ class Node:
 
     @property
     def java_home(self):
-        result = ""
-        if self.config.has_option("jvm", "JAVA_HOME"):
-            result = self.config.get("jvm", "JAVA_HOME")
+        result = self.config.get("jvm", "JAVA_HOME", fallback="")
         return "jvm" in result and result or ""
+
+    @property
+    def rails_env(self):
+        result = self.config.get("jvm", "RAILS_ENV", fallback="")
+        return result
 
     @property
     def user(self):
@@ -702,15 +716,15 @@ def delete(node):
 
 @cli_command(group="Debugging")
 def log(node):
-    """browse the jvm's log file (use -f to follow tail)"""
+    """browse the jvm's log file"""
     logfile = "/logs/%s/stdio.log" % (node.name,)
     if os.path.exists(logfile):
-        os.execvp("less", ["less", "-R -n +F", logfile])
-    if os.getuid() != 0:
-        print("Hint: try with sudo")
+        os.execvp("/usr/bin/less", ["/usr/bin/less", "-R -n +F", logfile])
+    # if os.getuid() != 0:
+    #     print("Hint: try with sudo")
     if "SYSTEMD_PAGER" not in os.environ:
         os.environ["SYSTEMD_PAGER"] = "LESS=FRXM less"
-    os.execvp("journalctl", ["journalctl", "-u", node.svc] + sys.argv[3:])
+    os.execvp("/usr/bin/sudo", ["/usr/bin/journalctl", "-u", node.svc] + sys.argv[3:])
 
 
 def find_new_port():
@@ -744,34 +758,38 @@ def new(node):
 
 
 @cli_command(group="Configuration")
+def view(node, *args):
+    """show the jvm application's configuration using 'less'."""
+    show(node, "-l")
+
+
+@cli_command(group="Configuration")
 def show(node, *args):
-    """show the jvm's configuration. Use -l to use less instead of showing the config on the console."""
+    """Show the jvm application's configuration using 'cat'. Use -l to use 'less'."""
     node.ensure_valid()
     try:
-        if "-l" in args:
-            subprocess.run(["/usr/bin/less", node.config_file], check=True)
-        else:
-            subprocess.run(["/usr/bin/cat", node.config_file], check=True)
+        cmd = "-l" in args and "/usr/bin/less" or "/usr/bin/cat"
+        subprocess.run([cmd, node.config_file], check=True)
     except FileNotFoundError:
         print(
-            "\033[31mError\033[0m: '/usr/bin/less' command not found. Please make sure it is installed."
+            f"{C_Red}Error{C_Default}: '{cmd}' command not found. Please make sure it is installed."
         )
     except subprocess.CalledProcessError:
         print(
-            "\033[31mError\033[0m: Could not open or display the file using /usr/bin/less."
+            f"{C_Red}Error{C_Default}: Could not open or display '{node.config_file}' using '{cmd}'."
         )
 
 
 @cli_command(group="Configuration")
 def dump(node):
-    """show the jvm's parsed configuration (including defaults)"""
+    """Show the jvm's parsed configuration (including defaults)"""
     post_config(node)
     node.config.write(sys.stdout)
 
 
 @cli_command(group="Configuration")
 def config(node):
-    """edit the jvm's configuration"""
+    """Edit the jvm's configuration"""
     node.ensure_valid()
     if os.getuid() != 0:
         die("config requires sudo")
@@ -861,9 +879,8 @@ def build(node, workarea, args):
     """Build the application. We are running as the builder user."""
     target = path.join(workarea, "target")
     os.makedirs(target, exist_ok=True)
-    os.environ["PATH"] = (
-        node.config.get("jvm", "JAVA_HOME") + "/bin:/usr/local/bin:/bin:/usr/bin"
-    )
+    if node.java_home:
+        os.environ["PATH"] = node.java_home + "/bin:/usr/local/bin:/bin:/usr/bin"
 
     for repo in node.repos:
         moduledir = path.join(workarea, repo.module)
@@ -924,7 +941,11 @@ def build(node, workarea, args):
 
 @cli_command(group="Configuration")
 def deploy(node, *args):
-    """(re)build and redeploy the application"""
+    # The indent in the document stanza is so it looks good when usage() is shown.
+    # fmt: off
+    """(re)build and (re)deploy the application.
+              To deploy an app, JAVA_HOME or RAILS_ENV must be present in the config. If not, then the app is restarted."""
+    # fmt: on
     node.ensure_valid()
     if not os.access("/apps", os.W_OK):
         die("Need permission to write to /apps (maybe try sudo?)")
@@ -948,7 +969,7 @@ def deploy(node, *args):
         os.environ["WORKAREA"] = workarea
         try:
             # Only build if java_home exists
-            if node.java_home:
+            if node.java_home or node.rails_env:
                 build(node, workarea, args)
             # else wise we will stop and start
         finally:
@@ -1279,7 +1300,7 @@ def list(*apps):
         nodes.insert(0, apps[0])
     print(
         "%-30s  %7s  %5s  %-10s %-33s %s"
-        % ("NODE", "VERSION", "PORT", "USER", "JAVA_HOME", "STATUS")
+        % ("NODE", "VERSION", "PORT", "USER", "JAVA_HOME/RAILS_ENV", "STATUS")
     )
     for node in nodes:
         pid = node.pid()
@@ -1300,7 +1321,7 @@ def list(*apps):
                 node.version() or "-",
                 node.port() or "-",
                 node.user or "-",
-                node.java_home or "-",
+                node.java_home or node.rails_env or "-",
                 status,
             )
         )
@@ -1328,12 +1349,22 @@ def main():
     if len(sys.argv) == 2:
         if sys.argv[1] == "list":
             list()
+        else:
+            usage()
     elif len(sys.argv) < 3:
         usage()
     else:
         arg1 = sys.argv[1]
         arg2 = sys.argv[2]
         args = sys.argv[3:]
+        # show has the ability to have '-l'. make sure an alias like jshow='jvmctl -l show' works
+        if "-" in arg1 and len(args) > 0:
+            args.insert(0, arg1)
+            arg1 = args.pop(1)
+        # show has the ability to have '-l'. make sure an alias like jshow='jvmctl show -l' works
+        if "-" in arg2 and len(args) > 0:
+            args.insert(0, arg2)
+            arg2 = args.pop(1)
         # arg1 and arg2 can be reversed. eg show pyweb or pyweb show
         if arg1 in commands:
             sys.exit(commands[arg1](Node(arg2), *args) or 0)
