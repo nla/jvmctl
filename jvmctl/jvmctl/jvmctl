@@ -968,58 +968,48 @@ def deploy(node, *args):
         os.environ["NODE"] = node.name
         os.environ["WORKAREA"] = workarea
         try:
-            # Only build if java_home exists
-            if node.java_home or node.rails_env:
-                build(node, workarea, args)
-            # else wise we will stop and start
+            build(node, workarea, args)
         finally:
             sys.exit(0)
     else:
         pid, result = os.wait()
+    if result != 0:
+        manage_service("start", "fapolicyd.service")
+        die("Build failed. You may inspect " + workarea)
+    if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
+        manage_service("start", "fapolicyd.service")
+        die(
+            "Oh dear! " + target + " is empty.  I guess the build failed.  Bailing out."
+        )
+    newdest = dest + ".new." + timestamp
+    olddest = dest + ".old." + timestamp
+    print()
+    print("Copying %s to %s..." % (target, newdest))
+    shutil.copytree(target, newdest, symlinks=True)
+
+    print("Stopping %s..." % node.name)
+    node.spawnctl("stop")
+    print("Swapping in the the version...")
+    if path.exists(dest):
+        os.rename(dest, olddest)
+    os.rename(newdest, dest)
+
+    print("Configuring container...")
+    node.container.deploy()
+    node.autoregister()
+
     manage_service("start", "fapolicyd.service")
-    if node.java_home:
-        if result != 0:
-            die("Build failed. You may inspect " + workarea)
-        if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
-            die(
-                "Oh dear! "
-                + target
-                + " is empty.  I guess the build failed.  Bailing out."
-            )
-        newdest = dest + ".new." + timestamp
-        olddest = dest + ".old." + timestamp
-        print()
-        print("Copying %s to %s..." % (target, newdest))
-        shutil.copytree(target, newdest, symlinks=True)
-
-        print("Stopping %s..." % node.name)
-        node.spawnctl("stop")
-        print("Swapping in the the version...")
-        if path.exists(dest):
-            os.rename(dest, olddest)
-        os.rename(newdest, dest)
-
-        print("Configuring container...")
-        node.container.deploy()
-        node.autoregister()
-
-        print("Starting %s..." % node.name)
-        if node.spawnctl("start") == 0:
-            print("Success! Cleaning up the working area...")
-            shutil.rmtree(workarea)
-            if os.path.exists(olddest):
-                print("Deleting the old version, mwahahaha!")
-                shutil.rmtree(olddest)
-            node.spawnctl("enable")
-        else:
-            print("Uh.... something seems to have gone wrong starting up.")
-            print("I'm leaving the old version for you in %s" % olddest)
-    else:
-        print("Stopping %s..." % node.name)
-        node.spawnctl("stop")
-        print("Starting %s..." % node.name)
-        node.spawnctl("start")
+    print("Starting %s..." % node.name)
+    if node.spawnctl("start") == 0:
+        print("Success! Cleaning up the working area...")
+        shutil.rmtree(workarea)
+        if os.path.exists(olddest):
+            print("Deleting the old version, mwahahaha!")
+            shutil.rmtree(olddest)
         node.spawnctl("enable")
+    else:
+        print("Uh.... something seems to have gone wrong starting up.")
+        print("I'm leaving the old version for you in %s" % olddest)
     print("")
     status(node)
 
