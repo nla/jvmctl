@@ -59,6 +59,12 @@ fi
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.8
+- Fixed params like -d and -s not getting through to 'deploy'
+- Updated Usage.
+- 'deploy' adds port to the firewall.
+- Add 'EXTRA_FIREWALL_PORTS' to config to specify other ports to open that just the one specified by PORT=
+
 * Wed Jul 09 2025 Peter Hine <phine@nla.gov.au> 0.6.7
 - Revert 'show' to using 'cat'. 'show' now takes a parameter of -l, which will cause it to use 'less'.
 - 'list' can now take multiple application names.
