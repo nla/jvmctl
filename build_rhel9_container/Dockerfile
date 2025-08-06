@@ -1,5 +1,5 @@
 # Make a container for building RHEL9 RPMs
-FROM nla-registry-quay-quay.apps.dev-containers.nla.gov.au/nla/ubi9
+FROM container-registry.nla.gov.au/nla/ubi9
 
 MAINTAINER Peter Hine <phine@nla.gov.au>
 LABEL vendor="RPM BUILD" \
