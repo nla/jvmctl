@@ -579,28 +579,6 @@ class Node:
         finally:
             f.close()
 
-    def add_ports_to_firewall(self):
-        try:
-            ports = f'{self.port()} {unquote(self.config.get("jvm", "EXTRA_FIREWALL_PORTS", fallback=""))}'.split(" ")
-            for port in ports:
-                if port:
-                    print(f"Adding port {port} to firewall ...")
-                    subprocess.run(
-                        [
-                            "/usr/bin/firewall-cmd",
-                            "--permanent",
-                            "--add-port",
-                            f"{port}/tcp",
-                        ],
-                        check=True,
-                    )
-            return subprocess.run(
-                ["/usr/bin/firewall-cmd", "--reload"],
-                check=True,
-            ).returncode
-        except subprocess.CalledProcessError:
-            # Remove python error and allow systemctl's error to be seen
-            return 1
 
     def version(self):
         try:
@@ -1028,7 +1006,6 @@ def deploy(node, *args):
     node.container.deploy()
     node.autoregister()
 
-    node.add_ports_to_firewall()
     manage_service("start", "fapolicyd.service")
     print("Starting %s..." % node.name)
     if node.spawnctl("start") == 0:
