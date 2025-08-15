@@ -59,6 +59,9 @@ fi
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 
 %changelog
+* Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.9
+- Revert 'deploy' adding port to the firewall.
+
 * Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.8
 - Fixed params like -d and -s not getting through to 'deploy'
 - Updated Usage.
