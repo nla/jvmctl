@@ -29,3 +29,20 @@ To run a build, from the top level jvmctl directory, run:
 There is a dependancy on the build containers being present, and you may wish to have the bssadmin gpg key imported for signing the RPM
 
 alex.nla.gov.au has the necessary podman setup
+
+To build th RPM's 
+==install==
+brew install podman
+brew install podman-compose
+
+==Build the RPMs==
+podman compose --profile rpm-build-8 up
+podman compose --profile rpm-build-9 up
+podman compose --profile rpm-build-10 up
+
+They'll appear in jvmctl/RPM/noarch
+
+==Test the RPM install==
+podman compose --profile rpm-install-8 up
+podman compose --profile rpm-install-9 up
+podman compose --profile rpm-install-10 up
