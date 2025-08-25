@@ -1047,7 +1047,8 @@ def deploy(node, *args):
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
-        manage_service("stop", "fapolicyd.service")
+        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
+            manage_service("stop", "fapolicyd.service")
         switchuid(pw.pw_uid, pw.pw_gid)()
         os.environ["MAVEN_OPTS"] = ""
         for arg in args:
@@ -1068,10 +1069,12 @@ def deploy(node, *args):
     else:
         pid, result = os.wait()
     if result != 0:
-        manage_service("start", "fapolicyd.service")
+        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
+            manage_service("start", "fapolicyd.service")
         die("Build failed. You may inspect " + workarea)
     if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
-        manage_service("start", "fapolicyd.service")
+        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
+            manage_service("start", "fapolicyd.service")
         die(
             "Oh dear! " + target + " is empty.  I guess the build failed.  Bailing out."
         )
@@ -1093,7 +1096,8 @@ def deploy(node, *args):
     node.autoregister()
 
     node.add_ports_to_firewall()
-    manage_service("start", "fapolicyd.service")
+    if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
+        manage_service("start", "fapolicyd.service")
     print("Starting %s..." % node.name)
     if node.spawnctl("start") == 0:
         print("Success! Cleaning up the working area...")
