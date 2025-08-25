@@ -41,6 +41,7 @@ C_Purple = "\033[38;5;129m"
 C_DarkGreen = "\033[38;5;22m"
 F_UNDERLINED="\033[4m"
 
+NODE = ""
 DEFAULTS = """
 [jetty]
 REPO=https://repo1.maven.org/maven2/org/eclipse/jetty/
@@ -110,7 +111,16 @@ def parse_shell_arrays(data):
         pos = m.end()
     out += data[pos:]
     return out
-
+def fapolicydRunning():
+    """
+    Check if fapolicyd is running.
+    """
+    status_result = subprocess.run(
+        ["/usr/bin/systemctl", "is-active", "fapolicyd.service"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return status_result.stdout.decode().strip() == "active"
 
 def manage_service(action, service_name=""):
     """
@@ -122,17 +132,18 @@ def manage_service(action, service_name=""):
         :return :int        Output of subprocess.run
     """
     try:
-        if service_name == "fapolicyd.service":
-            # We want the assurity of seeing this re-start at the end of the process.
-            print("Running /usr/bin/systemctl", action, service_name)
-        if service_name:
-            return subprocess.run(
-                ["/usr/bin/systemctl", "--no-pager", "--full", action, service_name],
-                check=True,
-            ).returncode
-        else:
-            # daemon reload doesn't like --no-pager
-            return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
+        if fapolicydRunning():
+            if service_name == "fapolicyd.service":
+                # We want the assurity of seeing this re-start at the end of the process.
+                print("Running /usr/bin/systemctl", action, service_name)
+            if service_name:
+                return subprocess.run(
+                    ["/usr/bin/systemctl", "--no-pager", "--full", action, service_name],
+                    check=True,
+                ).returncode
+            else:
+                # daemon reload doesn't like --no-pager
+                return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
     except subprocess.CalledProcessError:
         # Remove python error and allow systemctl's error to be seen
         return 1
@@ -1036,8 +1047,7 @@ def deploy(node, *args):
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("stop", "fapolicyd.service")
+        manage_service("stop", "fapolicyd.service")
         switchuid(pw.pw_uid, pw.pw_gid)()
         os.environ["MAVEN_OPTS"] = ""
         for arg in args:
@@ -1058,12 +1068,10 @@ def deploy(node, *args):
     else:
         pid, result = os.wait()
     if result != 0:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("start", "fapolicyd.service")
+        manage_service("start", "fapolicyd.service")
         die("Build failed. You may inspect " + workarea)
     if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("start", "fapolicyd.service")
+        manage_service("start", "fapolicyd.service")
         die(
             "Oh dear! " + target + " is empty.  I guess the build failed.  Bailing out."
         )
@@ -1085,8 +1093,7 @@ def deploy(node, *args):
     node.autoregister()
 
     node.add_ports_to_firewall()
-    if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-        manage_service("start", "fapolicyd.service")
+    manage_service("start", "fapolicyd.service")
     print("Starting %s..." % node.name)
     if node.spawnctl("start") == 0:
         print("Success! Cleaning up the working area...")

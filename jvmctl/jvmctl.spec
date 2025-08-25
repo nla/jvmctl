@@ -26,6 +26,13 @@ Deploy and manage Java applications on RHEL servers
 %pre
 /usr/bin/getent group builder > /dev/null || /usr/sbin/groupadd -r builder -g 440
 /usr/bin/getent passwd builder > /dev/null || /usr/sbin/useradd -r -g builder -u 440 -c "Builder service account" -m builder
+/usr/bin/getent group webapp > /dev/null || /usr/sbin/groupadd -r webapp -g 1002
+/usr/bin/getent passwd webapp > /dev/null || /usr/sbin/useradd -r -g webapp -u 439 -c "webapp service account" webapp
+/usr/bin/getent group logger > /dev/null || /usr/sbin/groupadd -r logger -g 1000
+/usr/bin/getent passwd logger > /dev/null || /usr/sbin/useradd -r -g logger -u 437 -c "logger service account" builder
+
+
+
 exit 0
 
 %prep
@@ -51,8 +58,8 @@ fi
 
 %files
 %defattr(644,root,root,755)
-%attr(755, root, root) /usr/bin/hsperf
-%attr(755, root, root) /usr/bin/jvmctl
+%attr(755, root, root) %{_bindir}/hsperf
+%attr(755, root, root) %{_bindir}/jvmctl
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
 %attr(644, root, root) /etc/jvmctl/apps
 %attr(644, webapp, webapp) /apps

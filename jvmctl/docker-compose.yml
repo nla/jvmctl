@@ -1,7 +1,7 @@
 version: '3'
 services:
   el8-rpmbuild:
-    image: redhat/ubi8
+    image: container-registry.nla.gov.au/ubi8/ubi
     working_dir: /workspace
     profiles: ["rpm-build-8"]
     command:
@@ -29,28 +29,29 @@ services:
     volumes:
       - ./RPM:/root/rpmbuild/RPMS
 
-  el9:
-    image: redhat/ubi9
+  el9-rpmbuild:
+    image: container-registry.nla.gov.au/mirrors/ubi9
     working_dir: /workspace
     profiles: ["rpm-build-9"]
     command:
       - /bin/sh
       - -c
       - |
-        dnf install rpm-build python3-setuptools -y
+        dnf install rpm-build python3 python3-setuptools -y
         rpmbuild -ba jvmctl.spec
     volumes:
       - .:/workspace
       - ./dist:/root/rpmbuild/SOURCES:ro
       - ./RPM:/root/rpmbuild/RPMS
   el9-install:
-    image: redhat/ubi8
+    image: container-registry.nla.gov.au/mirrors/ubi9
     profiles: ["rpm-install-9"]
     working_dir: /root/rpmbuild/RPMS/noarch
     command:
       - /bin/sh
       - -c
       - |
+        sudo dnf remove jvmctl -y
         dnf install jvmctl-*.el9.noarch.rpm -y
         jvmctl new test
         jvmctl list
@@ -58,14 +59,14 @@ services:
       - ./RPM:/root/rpmbuild/RPMS
 
   el10:
-    image: redhat/ubi10
+    image: container-registry.nla.gov.au/mirrors/ubi10
     working_dir: /workspace
     profiles: ["rpm-build-10"]
     command:
       - /bin/sh
       - -c
       - |
-        dnf install rpm-build python3-setuptools -y
+        dnf install rpm-build python3 python3-setuptools -y
         rpmbuild -ba jvmctl.spec
     volumes:
       - .:/workspace
@@ -74,7 +75,7 @@ services:
       - ./BUILDROOT:/root/rpmbuild/BUILDROOT
 
   el10-install:
-    image: redhat/ubi10
+    image: container-registry.nla.gov.au/mirrors/ubi10
     profiles: ["rpm-install-10"]
     working_dir: /root/rpmbuild/RPMS/noarch
     command:
