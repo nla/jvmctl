@@ -9,6 +9,7 @@ proxy.sh
 *.so
 
 # Distribution / packaging
+.DS_Store
 .Python
 env/
 build/
@@ -60,3 +61,5 @@ target/
 
 /.idea
 *.iml
+jvmctl/RPM
+jvmctl/BUILDROOT

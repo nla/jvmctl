@@ -5,8 +5,8 @@
 Summary: Deploy and manage Java applications on RHEL servers
 Name: %{name}
 Version: %{version}
-Release: %{release}
-Source:  %{expand:%%(pwd)}
+Release: %{release}%{?dist}
+#Source0: /workspace
 License: MIT
 Group: Development/Libraries
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
@@ -15,32 +15,33 @@ BuildArch: noarch
 Vendor: NLA BSS
 Packager: USER <user@shire.nla.gov.au>
 Requires: git
+BuildRequires: python3
+BuildRequires: python3-setuptools
 Url: https://github.com/nla/jvmctl
 Distribution: elX
-
 
 %description
 Deploy and manage Java applications on RHEL servers
 
 %pre
 /usr/bin/getent group builder > /dev/null || /usr/sbin/groupadd -r builder -g 440
-/usr/bin/getent passwd builder > /dev/null || /usr/sbin/useradd -r -g builder -u 440 -c "Builder service account" builder
+/usr/bin/getent passwd builder > /dev/null || /usr/sbin/useradd -r -g builder -u 440 -c "Builder service account" -m builder
+/usr/bin/getent group webapp > /dev/null || /usr/sbin/groupadd -r webapp -g 1002
+/usr/bin/getent passwd webapp > /dev/null || /usr/sbin/useradd -r -g webapp -u 439 -c "webapp service account" webapp
+/usr/bin/getent group logger > /dev/null || /usr/sbin/groupadd -r logger -g 1000
+/usr/bin/getent passwd logger > /dev/null || /usr/sbin/useradd -r -g logger -u 437 -c "logger service account" builder
+
 exit 0
 
 %prep
 %build
 
 %install
-/usr/bin/mkdir -p $RPM_BUILD_ROOT%{_bindir}/ $RPM_BUILD_ROOT/etc/bash_completion.d
-/usr/bin/cp %{SOURCEURL0}/%{name}/* $RPM_BUILD_ROOT%{_bindir}/
-/usr/bin/cp %{SOURCEURL0}/bash_completion/* $RPM_BUILD_ROOT/etc/bash_completion.d/
+cd /workspace
+python3 setup.py install --root=%{buildroot} --prefix=/usr
 
 %post
-# Remove site-packages directories, from previous installations
-for dir in $(/usr/bin/ls -d /usr/lib*/python*/site-packages/%{name}* 2>/dev/null)
-do
-  /usr/bin/rm -rf "${dir}" 2>/dev/null
-done
+
 if [ ! -e "/etc/%{name}.conf" ]
 then
   echo '[jvm]
@@ -49,19 +50,21 @@ GC_LOG_OPTS = -Xloggc:/dev/fd/3
 LOG_DIR = /misc/bss/jvmctl
 ' >"/etc/%{name}.conf"
 fi
-/usr/bin/mkdir -p /etc/jvmctl/apps
-/usr/sbin/restorecon -F "/etc/%{name}.conf" /etc/jvmctl/apps
+if [ -x /usr/sbin/restorecon ]; then
+  /usr/sbin/restorecon -F "/etc/%{name}.conf" /etc/jvmctl/apps
+fi
 
 %files
 %defattr(644,root,root,755)
 %attr(755, root, root) %{_bindir}/hsperf
 %attr(755, root, root) %{_bindir}/jvmctl
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
+%attr(644, root, root) /etc/jvmctl/apps
+%attr(644, webapp, webapp) /apps
+%attr(644, logger, logger) /logs
+/usr/lib/python3*
 
 %changelog
-* Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.9
-- Revert 'deploy' adding port to the firewall.
-
 * Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.8
 - Fixed params like -d and -s not getting through to 'deploy'
 - Updated Usage.

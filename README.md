@@ -7,8 +7,6 @@ and debugging tasks.
 
 ## Installation
 
-For the jvmctl tool, see jvmctl/README. logduct and sendlog may still be able to use these instructions but given the problems with RHEL9, they will need ot be altered too.
-
 1. Install a version of Python 3 (you probably already have it)
 2. `cd jvmctl && python setup.py install`
 
