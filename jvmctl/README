@@ -3,6 +3,10 @@ To build th RPM's
 brew install podman
 brew install podman-compose
 
+find RPM-GPG-PRIVATE-KEY-bssadmin RPM-GPG-PUBLIC-KEY-bssadmin and in bitwarden (look for "bss custom repo private key)
+Place them in {root}/jvmctl/RPM
+Create a file called gpg-passphrase.txt in {root}/jvmctl/RPM
+
 ==Build the RPMs==
 cd into jvmctl (the one with the docker-compose.yml file)
 podman compose --profile rpm-build-8 up

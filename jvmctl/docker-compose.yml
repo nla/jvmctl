@@ -1,88 +1,121 @@
 version: '3'
 services:
   el8-rpmbuild:
-    image: container-registry.nla.gov.au/ubi8/ubi
+    image: container-registry.nla.gov.au/mirrors/almalinux-8:8
     working_dir: /workspace
     profiles: ["rpm-build-8"]
     command:
       - /bin/sh
       - -c
       - |
-        dnf install rpm-build python3 python3-setuptools -y
+        set -ex
+        dnf install -y dnf-plugins-core && dnf config-manager --set-enabled powertools
+        dnf install rpm-build rpm-sign gnupg2 python3 python3-setuptools pinentry -y
         rpmbuild -ba jvmctl.spec
+        export GPG_TTY=$(tty)
+        gpg2 --batch --yes --pinentry-mode loopback --import /workspace/RPM/RPM-GPG-PRIVATE-KEY-bssadmin
+        rpm --addsign /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
+        cp /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        gpg --armor --export bssadmin > /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm --import /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm -Kv /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
     volumes:
       - .:/workspace
+      - ./.rpmmacros:/root/.rpmmacros
       - ./dist:/root/rpmbuild/SOURCES:ro
-      - ./RPM:/root/rpmbuild/RPMS
       - ./BUILDROOT:/root/rpmbuild/BUILDROOT
+      - ./RPM:/root/rpmbuild/RPMS
   el8-install:
-    image: redhat/ubi8
+    image: container-registry.nla.gov.au/mirrors/almalinux-8:8
     profiles: ["rpm-install-8"]
     working_dir: /root/rpmbuild/RPMS/noarch
     command:
       - /bin/sh
       - -c
       - |
-        dnf install jvmctl-*.el8.noarch.rpm -y
+        rpm --import /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin
+        dnf install jvmctl-*.el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm -y
         jvmctl new test
         jvmctl list
     volumes:
       - ./RPM:/root/rpmbuild/RPMS
 
   el9-rpmbuild:
-    image: container-registry.nla.gov.au/mirrors/ubi9
+    image: container-registry.nla.gov.au/mirrors/almalinux-9:9
     working_dir: /workspace
     profiles: ["rpm-build-9"]
     command:
       - /bin/sh
       - -c
       - |
-        dnf install rpm-build python3 python3-setuptools -y
+        set -ex
+        dnf install -y dnf-plugins-core && dnf config-manager --set-enabled crb
+        dnf install rpm-build rpm-sign gnupg2 python3 python3-setuptools pinentry -y
         rpmbuild -ba jvmctl.spec
+        export GPG_TTY=$(tty)
+        gpg2 --batch --yes --pinentry-mode loopback --import /workspace/RPM/RPM-GPG-PRIVATE-KEY-bssadmin
+        rpm --addsign /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
+
+        cp /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        gpg --armor --export bssadmin > /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm --import /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm -Kv /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
     volumes:
       - .:/workspace
+      - ./.rpmmacros:/root/.rpmmacros
       - ./dist:/root/rpmbuild/SOURCES:ro
+      - ./BUILDROOT:/root/rpmbuild/BUILDROOT
       - ./RPM:/root/rpmbuild/RPMS
   el9-install:
-    image: container-registry.nla.gov.au/mirrors/ubi9
+    image: container-registry.nla.gov.au/mirrors/almalinux-9:9
     profiles: ["rpm-install-9"]
     working_dir: /root/rpmbuild/RPMS/noarch
     command:
       - /bin/sh
       - -c
       - |
-        sudo dnf remove jvmctl -y
-        dnf install jvmctl-*.el9.noarch.rpm -y
+        rpm --import /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin
+        dnf install jvmctl-*.el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm -y
         jvmctl new test
         jvmctl list
     volumes:
       - ./RPM:/root/rpmbuild/RPMS
 
   el10:
-    image: container-registry.nla.gov.au/mirrors/ubi10
+    image: container-registry.nla.gov.au/mirrors/almalinux-10:10
     working_dir: /workspace
     profiles: ["rpm-build-10"]
     command:
       - /bin/sh
       - -c
       - |
-        dnf install rpm-build python3 python3-setuptools -y
+        set -ex
+        dnf install -y dnf-plugins-core && dnf config-manager --set-enabled crb
+        dnf install rpm-build rpm-sign gnupg2 python3 python3-setuptools pinentry -y
         rpmbuild -ba jvmctl.spec
+        export GPG_TTY=$(tty)
+        gpg2 --batch --yes --pinentry-mode loopback --import /workspace/RPM/RPM-GPG-PRIVATE-KEY-bssadmin
+        rpm --addsign /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
+        cp /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        gpg --armor --export bssadmin > /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm --import /root/RPM-GPG-PUBLIC-KEY-bssadmin-armor
+        rpm -Kv /workspace/RPM/noarch/jvmctl-$(cat /workspace/VERSION)-$(cat /workspace/RELEASE).el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm
     volumes:
       - .:/workspace
+      - ./.rpmmacros:/root/.rpmmacros
       - ./dist:/root/rpmbuild/SOURCES:ro
-      - ./RPM:/root/rpmbuild/RPMS
       - ./BUILDROOT:/root/rpmbuild/BUILDROOT
-
+      - ./RPM:/root/rpmbuild/RPMS
   el10-install:
-    image: container-registry.nla.gov.au/mirrors/ubi10
+    image: container-registry.nla.gov.au/mirrors/almalinux-10:10
     profiles: ["rpm-install-10"]
     working_dir: /root/rpmbuild/RPMS/noarch
     command:
       - /bin/sh
       - -c
       - |
-        dnf install jvmctl-*.el10.noarch.rpm -y
+        rpm --import /root/rpmbuild/RPMS/RPM-GPG-PUBLIC-KEY-bssadmin
+        dnf install jvmctl-*.el$(grep -oE '[0-9]+' /etc/redhat-release | head -1).noarch.rpm -y
         jvmctl new test
         jvmctl list
     volumes:

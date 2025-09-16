@@ -59,9 +59,9 @@ fi
 %attr(755, root, root) %{_bindir}/hsperf
 %attr(755, root, root) %{_bindir}/jvmctl
 %attr(644, root, root) /etc/bash_completion.d/jvmctl
-%attr(644, root, root) /etc/jvmctl/apps
-%attr(644, webapp, webapp) /apps
-%attr(644, logger, logger) /logs
+%attr(655, root, root) /etc/jvmctl/apps
+%attr(655, webapp, webapp) /apps
+%attr(655, logger, logger) /logs
 /usr/lib/python3*
 
 %changelog
