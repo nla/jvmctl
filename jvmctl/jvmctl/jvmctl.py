@@ -84,6 +84,7 @@ control_tools_root = path.dirname(path.dirname(path.realpath(__file__)))
 commands = {}
 groups = collections.OrderedDict()
 systemctl_exe = shutil.which("systemctl")
+fapolicyd_installed = shutil.which("fapolicyd") is not None
 
 def cli_command(group=None):
     if group not in groups:
@@ -122,6 +123,7 @@ def fapolicyd_running():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    # Returns inactive even if fapolicyd is not installed
     return status_result.stdout.decode().strip() == "active"
 
 def manage_service(action, service_name=""):
@@ -136,11 +138,10 @@ def manage_service(action, service_name=""):
     if systemctl_exe is None:
         return 0
     if service_name == "fapolicyd.service":
+        if not fapolicyd_installed:
+            return 0
         # Don't try to manage fapolicyd if it's not enabled.
         if not path.exists("/etc/systemd/system/multi-user.target.wants/fapolicyd.service"):
-            return 0
-        # Don't try to start fapolicyd if it's already running.
-        if action == "start" and fapolicyd_running():
             return 0
         # We want the assurity of seeing fapolicy actions, especially at the end of the process.
         print(f"Running {systemctl_exe}", action, service_name)
