@@ -69,7 +69,7 @@ fi
 - Fix issue with fapolicyd not turning off and on properly.
 - Fix issue with the .service file not being removed from /etc/systemd/system.
 
-* Mon Jul 28 2025 Shaun Darvell <phine@nla.gov.au> 0.6.10
+* Mon Jul 28 2025 Shaun Darvell <sdarvell@nla.gov.au> 0.6.10
 - Add support for jetty 12.
 - Fix RPM build procedures.
 
