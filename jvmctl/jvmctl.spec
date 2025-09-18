@@ -65,6 +65,17 @@ fi
 /usr/lib/python3*
 
 %changelog
+* Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.11
+- Fix issue with fapolicyd not turning off and on properly.
+- Fix issue with the .service file not being removed from /etc/systemd/system.
+
+* Mon Jul 28 2025 Shaun Darvell <phine@nla.gov.au> 0.6.10
+- Add support for jetty 12.
+- Fix RPM build procedures.
+
+* Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.9
+- Revert firewall changes.
+
 * Mon Jul 28 2025 Peter Hine <phine@nla.gov.au> 0.6.8
 - Fixed params like -d and -s not getting through to 'deploy'
 - Updated Usage.
