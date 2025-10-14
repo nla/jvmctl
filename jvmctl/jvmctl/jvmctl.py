@@ -83,7 +83,8 @@ WantedBy=multi-user.target
 control_tools_root = path.dirname(path.dirname(path.realpath(__file__)))
 commands = {}
 groups = collections.OrderedDict()
-
+systemctl_exe = shutil.which("systemctl")
+fapolicyd_installed = shutil.which("fapolicyd") is not None
 
 def cli_command(group=None):
     if group not in groups:
@@ -111,7 +112,9 @@ def parse_shell_arrays(data):
         pos = m.end()
     out += data[pos:]
     return out
-def fapolicydRunning():
+
+
+def fapolicyd_running():
     """
     Check if fapolicyd is running.
     """
@@ -120,6 +123,7 @@ def fapolicydRunning():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    # Returns inactive even if fapolicyd is not installed
     return status_result.stdout.decode().strip() == "active"
 
 def manage_service(action, service_name=""):
@@ -131,19 +135,25 @@ def manage_service(action, service_name=""):
         service_name: str:  Can be empty if action is daemon-reload
         :return :int        Output of subprocess.run
     """
+    if systemctl_exe is None:
+        return 0
+    if service_name == "fapolicyd.service":
+        if not fapolicyd_installed:
+            return 0
+        # Don't try to manage fapolicyd if it's not enabled.
+        if not path.exists("/etc/systemd/system/multi-user.target.wants/fapolicyd.service"):
+            return 0
+        # We want the assurity of seeing fapolicy actions, especially at the end of the process.
+        print(f"Running {systemctl_exe}", action, service_name)
     try:
-        if fapolicydRunning():
-            if service_name == "fapolicyd.service":
-                # We want the assurity of seeing this re-start at the end of the process.
-                print("Running /usr/bin/systemctl", action, service_name)
-            if service_name:
-                return subprocess.run(
-                    ["/usr/bin/systemctl", "--no-pager", "--full", action, service_name],
-                    check=True,
-                ).returncode
-            else:
-                # daemon reload doesn't like --no-pager
-                return subprocess.run(["/usr/bin/systemctl", action], check=True).returncode
+        if service_name:
+            return subprocess.run(
+                [systemctl_exe, "--no-pager", "--full", action, service_name],
+                check=True,
+            ).returncode
+        else:
+            # daemon reload doesn't like --no-pager
+            return subprocess.run([systemctl_exe, action], check=True).returncode
     except subprocess.CalledProcessError:
         # Remove python error and allow systemctl's error to be seen
         return 1
@@ -623,16 +633,16 @@ class Node:
                     self.java_home or "-",
                 )
             )
-        if os.path.exists("/usr/bin/systemctl"):
-            return manage_service(command, self.svc)
-        else:
+        if systemctl_exe is None:
             try:
                 return subprocess.call(
-                    [control_tools_root + "/bin/spawnctl", command, self.svc]
+                    [f"{control_tools_root}/bin/spawnctl", command, self.svc]
                 )
             except subprocess.CalledProcessError:
-                # Remove python error and allow systemctl's error to be seen
+                # Remove python error and allow spawnctl's error to be seen
                 return 1
+        else:
+             return manage_service(command, self.svc)
 
     def autoregister(self):
         systemd_register(self)
@@ -721,12 +731,14 @@ def start(node):
 @cli_command(group="Process management")
 def stop(node):
     """stop the jvm"""
+    node.ensure_valid()
     sys.exit(node.spawnctl("stop"))
 
 
 @cli_command(group="Process management")
 def disable(node):
     """stop the jvm and prevent it from running on startup"""
+    node.ensure_valid()
     sys.exit(node.spawnctl("disable"))
 
 
@@ -755,18 +767,20 @@ def restart(node):
 @cli_command(group="Process management")
 def status(node):
     """check whether the jvm is running"""
+    node.ensure_valid()
     port = node.port()
     if port is not None:
         print("URL: http://" + socket.gethostname() + ":" + port)
     print("Webapp path: " + node.apps_path)
     print("Version: " + (node.version() or "unknown"))
     print("")
-    manage_service("status", node.svc + " ".join(sys.argv[3:]))
+    node.spawnctl("status")
 
 
 @cli_command(group="Configuration")
 def delete(node):
     """delete the jvm's binaries and configuration"""
+    node.ensure_valid()
     node.spawnctl("stop")
     node.spawnctl("disable")
     if path.exists("/usr/sbin/svccfg"):
@@ -781,6 +795,7 @@ def delete(node):
     if path.exists(node.config_file):
         print("Removing", node.config_file)
         os.unlink(node.config_file)
+    systemd_unregister(node)
 
 
 @cli_command(group="Debugging")
@@ -1032,8 +1047,7 @@ def deploy(node, *args):
     env = dict(os.environ)
     pid = os.fork()
     if pid == 0:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("stop", "fapolicyd.service")
+        manage_service("stop", "fapolicyd.service")
         switchuid(pw.pw_uid, pw.pw_gid)()
         os.environ["MAVEN_OPTS"] = ""
         for arg in args:
@@ -1054,12 +1068,10 @@ def deploy(node, *args):
     else:
         pid, result = os.wait()
     if result != 0:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("start", "fapolicyd.service")
+        manage_service("start", "fapolicyd.service")
         die("Build failed. You may inspect " + workarea)
     if not [f for f in os.listdir(target) if not f.endswith("-revision")]:
-        if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-            manage_service("start", "fapolicyd.service")
+        manage_service("start", "fapolicyd.service")
         die(
             "Oh dear! " + target + " is empty.  I guess the build failed.  Bailing out."
         )
@@ -1080,8 +1092,7 @@ def deploy(node, *args):
     node.container.deploy()
     node.autoregister()
 
-    if shutil.which("systemctl") and path.exists("/etc/systemd/system/fapolicyd.service"):
-        manage_service("start", "fapolicyd.service")
+    manage_service("start", "fapolicyd.service")
     print("Starting %s..." % node.name)
     if node.spawnctl("start") == 0:
         print("Success! Cleaning up the working area...")
@@ -1239,6 +1250,11 @@ def post_config(node):
             node.config, "systemd.service.Service", "StandardInput", "socket"
         )
 
+
+@cli_command(group="Hidden")
+def systemd_unregister(node):
+    os.unlink("/etc/systemd/system/" + node.svc + ".service")
+    manage_service("daemon-reload")
 
 @cli_command(group="Hidden")
 def systemd_register(node):
