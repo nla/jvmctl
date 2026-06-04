@@ -606,7 +606,7 @@ class Node:
             self._config = Config(self.config_file)
         return self._config
 
-    def ensure_valid(self):
+    def ensure_exists(self):
         if not path.isfile(self.config_file):
             die(
                 self.config_file
@@ -614,6 +614,9 @@ class Node:
                 + self.name
                 + " new"
             )
+
+    def ensure_valid(self):
+        self.ensure_exists()
         if subprocess.call(["/bin/bash", "-n", self.config_file]) != 0:
             die(self.config_file + ": syntax error")
 
@@ -854,7 +857,7 @@ def view(node, *args):
 @cli_command(group="Configuration")
 def show(node, *args):
     """Show the jvm application's configuration using 'cat'. Use -l to use 'less'."""
-    node.ensure_valid()
+    node.ensure_exists()
     cmd = "-l" in args and "/usr/bin/less" or "/usr/bin/cat"
     try:
         subprocess.run([cmd, node.config_file], check=True)
@@ -878,12 +881,18 @@ def dump(node):
 @cli_command(group="Configuration")
 def config(node):
     """Edit the jvm's configuration"""
-    node.ensure_valid()
+    node.ensure_exists()
     if os.getuid() != 0:
         die("config requires sudo")
     if "EDITOR" not in os.environ:
         os.environ["EDITOR"] = "vi"
     result = subprocess.call(["sudoedit", node.config_file])
+    if subprocess.call(["/bin/bash", "-n", node.config_file]) != 0:
+        sys.stderr.write(
+            "Warning: " + node.config_file + " still has a syntax error. "
+            "Skipping reconfigure.\n"
+        )
+        return result
     reconfigure(node)
     os.chdir(CONF_ROOT)
     try:
@@ -1322,7 +1331,7 @@ WantedBy=sockets.target
 
 
 def fetch_hash(node):
-    node.ensure_valid()
+    node.ensure_exists()
     _hash=""
     try:
         _hash = subprocess.check_output(
